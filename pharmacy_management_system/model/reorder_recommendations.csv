@@ -1,0 +1,48 @@
+Medicine_ID,Medicine_Name,Current_Stock,Avg_Daily_Sales,Predicted_30_Days,Days_of_Stock,Reorder_Needed,Recommended_Order_Qty
+4281,Levolin 50mcg Inhaler,288,21,630,13.7,YES,756
+7427,Pantodac DSR Capsule,303,24,741,12.3,YES,889
+5179,Medrol 8mg Tablet,555,28,861,19.3,NO,0
+8190,Relent Plus Syrup,601,28,861,20.9,NO,0
+7898,Piritexyl Plus Cough Syrup,535,30,910,17.6,NO,0
+8476,Recofast Syrup,371,36,1101,10.1,YES,1321
+9138,Salbair 50mcg Transhaler,307,21,657,14.0,NO,0
+346,Alcarex Eye Drop,502,25,750,20.1,NO,0
+4536,Lobate M Cream,513,36,1080,14.2,NO,0
+586,Alorti Tablet,284,20,600,14.2,NO,0
+7972,Prelid 4mg Tablet,229,18,540,12.7,YES,648
+10964,Ventocore DL Tablet SR,468,30,900,15.6,NO,0
+150,Ambrodil-Plus RF Syrup,448,23,703,19.1,NO,0
+7676,P2i-D Capsule PR,170,14,420,12.1,YES,504
+1000,Anbid 500 Tablet,332,17,510,19.5,NO,0
+10343,Tancet L Tablet,333,25,752,13.3,YES,902
+5508,Milflox DF Eye Drop,382,22,660,17.4,NO,0
+1222,Betnovate-S Ointment,414,17,510,24.4,NO,0
+7562,Pataday Ophthalmic Solution,302,23,711,12.7,YES,853
+1225,Bilanix Tablet,293,19,570,15.4,NO,0
+3473,Helirab-D Capsule SR,441,24,720,18.4,NO,0
+2689,Fxla 180 Tablet,384,18,540,21.3,NO,0
+3145,Grandcef-CV Tablet,463,30,921,15.1,NO,0
+9613,Teczine Tablet,293,22,660,13.3,YES,792
+1778,Enuff Capsule,395,19,570,20.8,NO,0
+1467,Diprobate RD Cream,503,30,921,16.4,NO,0
+8799,Ronycold-M Tablet,431,21,630,20.5,NO,0
+9534,SGK Cream,162,16,480,10.1,YES,576
+9342,Salbetol 2 Tablet,656,29,883,22.3,NO,0
+5454,MP 4mg Tablet,850,34,1041,24.5,NO,0
+8295,Rekool 20 Tablet,349,16,480,21.8,NO,0
+2527,Flutivate 0.005% Ointment,272,12,360,22.7,NO,0
+2748,Ganaton Total Capsule SR,307,16,480,19.2,NO,0
+10841,Veloz 20 Tablet,279,23,711,11.8,YES,853
+4801,Laveta 10 Tablet DT,308,30,921,10.0,YES,1105
+9129,Solvin-EX Expectorant Passion Fruit Sugar Free,449,19,570,23.6,NO,0
+5452,Metolar XR 12.5 Capsule,473,20,600,23.6,NO,0
+6182,Neosporin H Ear Drop,211,21,630,10.0,YES,756
+5435,Monocef 2gm Injection,292,14,420,20.9,NO,0
+1669,Denon Soap,307,21,630,14.6,NO,0
+4914,Lulilok Cream,274,14,420,19.6,NO,0
+11715,Zelgra 180 Tablet,282,24,741,11.4,YES,889
+7062,Okacet Cold Total Tablet,516,24,741,20.9,NO,0
+9500,Supiroban 2% Ointment,355,29,870,12.2,YES,1044
+7696,Pregalift NT Tablet,169,12,360,14.1,NO,0
+620,Alerfix Tablet,463,23,690,20.1,NO,0
+2261,Eudyna Cream,182,16,480,11.4,YES,576

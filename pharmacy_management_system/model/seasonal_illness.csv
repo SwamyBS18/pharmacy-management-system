@@ -1,0 +1,14 @@
+Season,Illness,Peak_Months,Related_Categories,Severity
+Winter,Common Cold,Nov-Feb,"Respiratory,Analgesic,Antipyretic",High
+Winter,Seasonal Flu,Dec-Feb,"Respiratory,Antipyretic",High
+Winter,Pneumonia,Dec-Jan,"Antibiotic,Respiratory",Very High
+Summer,Heat Stroke,Apr-Jun,Supplement,Medium
+Summer,Dehydration,Apr-Jun,Supplement,Medium
+Summer,Skin Infections,Apr-Jun,"Dermatological,Antifungal",Low
+Monsoon,Dengue,Jul-Oct,"Antipyretic,Analgesic",Very High
+Monsoon,Malaria,Jul-Oct,Antibiotic,High
+Monsoon,Typhoid,Jul-Sep,Antibiotic,High
+Monsoon,Gastroenteritis,Jun-Sep,"Gastrointestinal,Antibiotic",Medium
+Spring,Allergies,Feb-Apr,Antihistamine,Medium
+All,Diabetes,All,Antidiabetic,Constant
+All,Hypertension,All,Cardiovascular,Constant
