@@ -10,13 +10,13 @@ const __dirname = dirname(__filename);
 async function initExtensions() {
   try {
     console.log("📦 Initializing extended database schema...");
-    
+
     const schemaPath = join(__dirname, "schema-extensions.sql");
     const schemaSQL = readFileSync(schemaPath, "utf-8");
-    
+
     // Execute the schema
     await pool.query(schemaSQL);
-    
+
     console.log("✅ Extended schema initialized successfully!");
     console.log("   - Customers table");
     console.log("   - Sales and Sales Items tables");
@@ -25,7 +25,7 @@ async function initExtensions() {
     console.log("   - Stock Adjustments table");
     console.log("   - Order Fulfillment table");
     console.log("   - Low Stock Thresholds table");
-    
+
   } catch (error: any) {
     console.error("❌ Error initializing extended schema:", error.message);
     process.exit(1);

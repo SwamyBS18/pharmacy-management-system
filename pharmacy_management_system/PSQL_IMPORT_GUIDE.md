@@ -51,19 +51,24 @@ CREATE TABLE IF NOT EXISTS medicines (
 **Important:** First, check the exact path to your CSV file. Then run:
 
 ```sql
-COPY medicines(
-    medicine_name, 
-    composition, 
-    uses, 
-    side_effects, 
-    image_url, 
-    manufacturer, 
-    excellent_review_percent, 
-    average_review_percent, 
-    poor_review_percent
+\copy medicines(
+    medicine_id,
+    medicine_name,
+    composition,
+    uses,
+    side_effects,
+    image_url,
+    manufacturer,
+    excellent_review_percent,
+    average_review_percent,
+    poor_review_percent,
+    category,
+    price
+
 )
-FROM 'C:\Users\user\OneDrive\Desktop\DBMS-EL\Pharmacy-20management-20system\Medicine_Details (2).csv'
-WITH (FORMAT csv, HEADER true, DELIMITER ',', QUOTE '"', ESCAPE '"');
+FROM 'C:/Users/vinuu/Downloads/DBms El/swamy/pharmacy-management-system/pharmacy_management_system/model/Medicine_Details_categorized.csv'
+CSV HEADER;
+
 ```
 
 **Note:** 
