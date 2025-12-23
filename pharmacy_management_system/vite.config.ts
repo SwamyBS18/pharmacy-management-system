@@ -1,7 +1,6 @@
-import { defineConfig, Plugin } from "vite";
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { createServer } from "./server";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -17,11 +16,18 @@ export default defineConfig(({ mode }) => ({
       ],
       deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "server/**"],
     },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',  // Python Flask backend
+        changeOrigin: true,
+        rewrite: (path) => path, // Keep the /api prefix
+      }
+    }
   },
   build: {
     outDir: "dist/spa",
   },
-  plugins: [react(), expressPlugin()],
+  plugins: [react()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "client"),
@@ -29,22 +35,3 @@ export default defineConfig(({ mode }) => ({
     },
   },
 }));
-
-function expressPlugin(): Plugin {
-  return {
-    name: "express-plugin",
-    apply: "serve", // Only apply during development (serve mode)
-    configureServer(server) {
-      const app = createServer();
-
-      // Mount Express app only for /api routes
-      // This ensures Vite handles all other routes (including the SPA)
-      // When Vite middleware mounts at "/api", the Express app receives requests
-      // with the "/api" prefix already stripped
-      server.middlewares.use("/api", (req, res, next) => {
-        console.log(`🔌 API Request: ${req.method} ${req.url}`);
-        app(req, res, next);
-      });
-    },
-  };
-}

@@ -1,9 +1,20 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Plus, Edit2, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
 import JsBarcode from "jsbarcode";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Medicine {
   id: number;
@@ -15,7 +26,20 @@ interface Medicine {
   barcode?: string;
   composition?: string;
   uses?: string;
+  side_effects?: string;
   image_url?: string;
+}
+
+interface MedicineFormData {
+  medicine_name: string;
+  manufacturer: string;
+  price: string;
+  stock: string;
+  category: string;
+  composition: string;
+  uses: string;
+  side_effects: string;
+  image_url: string;
 }
 
 // Barcode Image Component
@@ -25,8 +49,6 @@ function BarcodeImage({ barcode }: { barcode: string }) {
   useEffect(() => {
     if (canvasRef.current && barcode) {
       try {
-        // Use CODE128 format - more universal and doesn't require check digits
-        // Better compatibility with mobile scanners and barcode scanners
         JsBarcode(canvasRef.current, barcode, {
           format: "CODE128",
           width: 2,
@@ -36,8 +58,7 @@ function BarcodeImage({ barcode }: { barcode: string }) {
           fontSize: 12,
           background: "#ffffff",
           lineColor: "#000000",
-          // Ensure high quality rendering
-          valid: function(valid) {
+          valid: function (valid) {
             if (!valid) {
               console.warn("Invalid barcode:", barcode);
             }
@@ -53,7 +74,7 @@ function BarcodeImage({ barcode }: { barcode: string }) {
     <div className="inline-block bg-white p-2 rounded border border-slate-200">
       <canvas
         ref={canvasRef}
-        style={{ 
+        style={{
           imageRendering: "crisp-edges",
           maxWidth: "100%",
           height: "auto",
@@ -69,6 +90,21 @@ export default function Medicines() {
   const [selectedManufacturer, setSelectedManufacturer] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(100);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
+  const [formData, setFormData] = useState<MedicineFormData>({
+    medicine_name: "",
+    manufacturer: "",
+    price: "",
+    stock: "",
+    category: "",
+    composition: "",
+    uses: "",
+    side_effects: "",
+    image_url: "",
+  });
+
+  const queryClient = useQueryClient();
 
   // Fetch manufacturers list
   const { data: manufacturersData } = useQuery<string[]>({
@@ -108,19 +144,60 @@ export default function Medicines() {
   const medicines = data?.data || [];
   const pagination = data?.pagination || { page: 1, limit: 100, total: 0, totalPages: 1 };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this medicine?")) return;
-    
-    try {
+  // Create medicine mutation
+  const createMutation = useMutation({
+    mutationFn: async (newMedicine: Partial<Medicine>) => {
+      const response = await fetch("/api/medicines", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newMedicine),
+      });
+      if (!response.ok) throw new Error("Failed to create medicine");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["medicines"] });
+      setIsDialogOpen(false);
+      resetForm();
+    },
+  });
+
+  // Update medicine mutation
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Medicine> }) => {
+      const response = await fetch(`/api/medicines/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error("Failed to update medicine");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["medicines"] });
+      setIsDialogOpen(false);
+      setEditingMedicine(null);
+      resetForm();
+    },
+  });
+
+  // Delete medicine mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
       const response = await fetch(`/api/medicines/${id}`, {
         method: "DELETE",
       });
-      if (response.ok) {
-        refetch();
-      }
-    } catch (error) {
-      console.error("Error deleting medicine:", error);
-    }
+      if (!response.ok) throw new Error("Failed to delete medicine");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["medicines"] });
+    },
+  });
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this medicine?")) return;
+    deleteMutation.mutate(id);
   };
 
   const handlePageChange = (newPage: number) => {
@@ -130,7 +207,64 @@ export default function Medicines() {
 
   const handleFilterChange = (manufacturer: string) => {
     setSelectedManufacturer(manufacturer);
-    setCurrentPage(1); // Reset to first page when filter changes
+    setCurrentPage(1);
+  };
+
+  const resetForm = () => {
+    setFormData({
+      medicine_name: "",
+      manufacturer: "",
+      price: "",
+      stock: "",
+      category: "",
+      composition: "",
+      uses: "",
+      side_effects: "",
+      image_url: "",
+    });
+    setEditingMedicine(null);
+  };
+
+  const handleOpenDialog = (medicine?: Medicine) => {
+    if (medicine) {
+      setEditingMedicine(medicine);
+      setFormData({
+        medicine_name: medicine.medicine_name,
+        manufacturer: medicine.manufacturer || "",
+        price: medicine.price?.toString() || "",
+        stock: medicine.stock?.toString() || "",
+        category: medicine.category || "",
+        composition: medicine.composition || "",
+        uses: medicine.uses || "",
+        side_effects: medicine.side_effects || "",
+        image_url: medicine.image_url || "",
+      });
+    } else {
+      resetForm();
+    }
+    setIsDialogOpen(true);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const medicineData = {
+      medicine_name: formData.medicine_name,
+      manufacturer: formData.manufacturer,
+      price: parseFloat(formData.price) || 0,
+      stock: parseInt(formData.stock) || 0,
+      category: formData.category,
+      composition: formData.composition,
+      uses: formData.uses,
+      side_effects: formData.side_effects,
+      image_url: formData.image_url,
+    };
+
+    if (editingMedicine) {
+      updateMutation.mutate({ id: editingMedicine.id, data: medicineData });
+    } else {
+      createMutation.mutate(medicineData);
+    }
   };
 
   if (isLoading) {
@@ -168,7 +302,10 @@ export default function Medicines() {
                 {selectedManufacturer && ` from ${selectedManufacturer}`}
               </p>
             </div>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Button
+              onClick={() => handleOpenDialog()}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
               <Plus className="h-4 w-4 mr-2" />
               Add Medicine
             </Button>
@@ -264,7 +401,6 @@ export default function Medicines() {
                             alt={medicine.medicine_name}
                             className="w-16 h-16 object-cover rounded-lg border border-slate-200"
                             onError={(e) => {
-                              // Fallback to placeholder if image fails to load
                               const target = e.target as HTMLImageElement;
                               target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23f1f5f9'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='Arial' font-size='10' fill='%2394a3b8'%3ENo Image%3C/text%3E%3C/svg%3E";
                             }}
@@ -298,13 +434,12 @@ export default function Medicines() {
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <span
-                          className={`px-5 py-1 rounded-full text-xs font-semibold ${
-                            medicine.stock > 100
+                          className={`px-5 py-1 rounded-full text-xs font-semibold ${medicine.stock > 100
                               ? "bg-emerald-100 text-emerald-700"
                               : medicine.stock > 50
                                 ? "bg-yellow-100 text-yellow-700"
-                                : "bg-blue-100 text-red-700"
-                          }`}
+                                : "bg-red-100 text-red-700"
+                            }`}
                         >
                           {medicine.stock || 0} units
                         </span>
@@ -313,7 +448,10 @@ export default function Medicines() {
                         {medicine.category || "N/A"}
                       </td>
                       <td className="px-6 py-4 text-sm space-x-2 flex">
-                        <button className="p-2 hover:bg-blue-100 rounded-lg transition text-blue-600">
+                        <button
+                          onClick={() => handleOpenDialog(medicine)}
+                          className="p-2 hover:bg-blue-100 rounded-lg transition text-blue-600"
+                        >
                           <Edit2 className="h-4 w-4" />
                         </button>
                         <button
@@ -348,7 +486,7 @@ export default function Medicines() {
                 <ChevronLeft className="h-4 w-4" />
                 Previous
               </Button>
-              
+
               {/* Page Numbers */}
               <div className="flex gap-1">
                 {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
@@ -362,7 +500,7 @@ export default function Medicines() {
                   } else {
                     pageNum = currentPage - 2 + i;
                   }
-                  
+
                   return (
                     <Button
                       key={pageNum}
@@ -391,6 +529,128 @@ export default function Medicines() {
           </div>
         )}
       </div>
+
+      {/* Add/Edit Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingMedicine ? "Edit Medicine" : "Add New Medicine"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingMedicine
+                ? "Update the medicine information below."
+                : "Fill in the details to add a new medicine to the inventory."}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <Label htmlFor="medicine_name">Medicine Name *</Label>
+                <Input
+                  id="medicine_name"
+                  value={formData.medicine_name}
+                  onChange={(e) => setFormData({ ...formData, medicine_name: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="manufacturer">Manufacturer</Label>
+                <Input
+                  id="manufacturer"
+                  value={formData.manufacturer}
+                  onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="category">Category</Label>
+                <Input
+                  id="category"
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="price">Price (₹)</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  step="0.01"
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="stock">Stock (units)</Label>
+                <Input
+                  id="stock"
+                  type="number"
+                  value={formData.stock}
+                  onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="composition">Composition</Label>
+                <Textarea
+                  id="composition"
+                  value={formData.composition}
+                  onChange={(e) => setFormData({ ...formData, composition: e.target.value })}
+                  rows={2}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="uses">Uses</Label>
+                <Textarea
+                  id="uses"
+                  value={formData.uses}
+                  onChange={(e) => setFormData({ ...formData, uses: e.target.value })}
+                  rows={2}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="side_effects">Side Effects</Label>
+                <Textarea
+                  id="side_effects"
+                  value={formData.side_effects}
+                  onChange={(e) => setFormData({ ...formData, side_effects: e.target.value })}
+                  rows={2}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="image_url">Image URL</Label>
+                <Input
+                  id="image_url"
+                  type="url"
+                  value={formData.image_url}
+                  onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+                  placeholder="https://example.com/image.jpg"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsDialogOpen(false);
+                  resetForm();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="bg-emerald-600 hover:bg-emerald-700"
+                disabled={createMutation.isPending || updateMutation.isPending}
+              >
+                {createMutation.isPending || updateMutation.isPending
+                  ? "Saving..."
+                  : editingMedicine ? "Update Medicine" : "Add Medicine"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
