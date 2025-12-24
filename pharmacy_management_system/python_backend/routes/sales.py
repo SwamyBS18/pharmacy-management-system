@@ -121,9 +121,9 @@ def create_sale():
         cursor = conn.cursor(cursor_factory=extras.RealDictCursor)
         
         # Calculate totals
-        total_amount = sum(item['unit_price'] * item['quantity'] for item in items)
+        total_amount = sum(float(item['unit_price']) * int(item['quantity']) for item in items)
         tax_amount = total_amount * 0.10  # 10% tax
-        discount_amount = data.get('discount_amount', 0)
+        discount_amount = float(data.get('discount_amount', 0))
         final_amount = total_amount + tax_amount - discount_amount
         
         # Generate invoice number

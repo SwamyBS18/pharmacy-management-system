@@ -150,10 +150,10 @@ export default function POS() {
         unit_price: item.unit_price,
       }));
 
-      let finalCustomerId = customerId;
-      
+      let finalCustomerId = customerId === "walk_in" ? "" : customerId;
+
       // Create customer if new customer info provided
-      if (!customerId && customerName) {
+      if ((!customerId || customerId === "walk_in") && customerName) {
         const customerResponse = await fetch("/api/customers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -394,7 +394,7 @@ export default function POS() {
                   <SelectValue placeholder="Select or add customer" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Walk-in Customer</SelectItem>
+                  <SelectItem value="walk_in">Walk-in Customer</SelectItem>
                   {customers.map((customer) => (
                     <SelectItem key={customer.id} value={customer.id.toString()}>
                       {customer.name} {customer.phone ? `(${customer.phone})` : ""}
@@ -402,7 +402,7 @@ export default function POS() {
                   ))}
                 </SelectContent>
               </Select>
-              {!customerId && (
+              {(!customerId || customerId === "walk_in") && (
                 <div className="space-y-2">
                   <Input
                     placeholder="Customer Name"

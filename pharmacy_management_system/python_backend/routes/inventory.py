@@ -3,7 +3,8 @@ Inventory API Routes
 Handles inventory management, stock tracking, and reorder suggestions
 """
 from flask import Blueprint, request, jsonify
-from db import execute_query
+from db import execute_query, get_db_connection, release_db_connection
+from psycopg2 import extras
 import logging
 
 logger = logging.getLogger(__name__)
@@ -133,32 +134,64 @@ def get_reorder_suggestions():
 
 @inventory_bp.route('/', methods=['POST'])
 def create_inventory_item():
-    """Create new inventory batch"""
+    """Create new inventory batch and update medicine stock"""
+    conn = None
     try:
         data = request.get_json()
         
         if not data.get('medicine_id') or not data.get('quantity'):
             return jsonify({'error': 'Medicine ID and quantity are required'}), 400
         
-        query = """
-            INSERT INTO inventory (medicine_id, batch_id, quantity, expiry_date, supplier_id, price)
-            VALUES (%s, %s, %s, %s, %s, %s)
+        medicine_id = data.get('medicine_id')
+        quantity = int(data.get('quantity'))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=extras.RealDictCursor)
+        
+        # 1. Insert into inventory (now with manufacturing_date)
+        inv_query = """
+            INSERT INTO inventory (
+                medicine_id, batch_id, quantity, expiry_date, 
+                manufacturing_date, supplier_id, price
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING *
         """
-        params = (
-            data.get('medicine_id'),
+        inv_params = (
+            medicine_id,
             data.get('batch_id'),
-            data.get('quantity'),
+            quantity,
             data.get('expiry_date'),
+            data.get('manufacturing_date'),
             data.get('supplier_id'),
             data.get('price')
         )
         
-        inventory_item = execute_query(query, params, fetch_one=True)
+        cursor.execute(inv_query, inv_params)
+        inventory_item = cursor.fetchone()
+        
+        # 2. Update total stock in medicines table
+        update_stock_query = """
+            UPDATE medicines 
+            SET stock = stock + %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """
+        cursor.execute(update_stock_query, (quantity, medicine_id))
+        
+        conn.commit()
+        cursor.close()
+        
         return jsonify(inventory_item), 201
+        
     except Exception as e:
+        if conn:
+            conn.rollback()
         logger.error(f"Error creating inventory item: {e}")
-        return jsonify({'error': 'Failed to create inventory item'}), 500
+        return jsonify({'error': 'Failed to create inventory item', 'details': str(e)}), 500
+    finally:
+        if conn:
+            release_db_connection(conn)
 
 @inventory_bp.route('/<int:inventory_id>', methods=['PUT'])
 def update_inventory_item(inventory_id):
