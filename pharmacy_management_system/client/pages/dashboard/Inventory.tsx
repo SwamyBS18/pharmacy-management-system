@@ -1,6 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Plus, AlertCircle } from "lucide-react";
+import { Plus, AlertCircle, Edit, Printer, Trash2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
+import Barcode from "react-barcode";
 
 interface InventoryItem {
   id: number;
@@ -50,6 +51,13 @@ interface SupplierOption {
 
 export default function Inventory() {
   const [isAddStockOpen, setIsAddStockOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showMedicineDropdown, setShowMedicineDropdown] = useState(false);
+  const [printBarcodeOpen, setPrintBarcodeOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -91,6 +99,23 @@ export default function Inventory() {
     },
   });
 
+  const [generatedBarcode, setGeneratedBarcode] = useState<string | null>(null);
+
+  // Filter medicines based on search term
+  const filteredMedicines = medicines?.filter((m) =>
+    m.medicine_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    m.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    m.manufacturer?.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || [];
+
+  // Get selected medicine for display
+  const selectedMedicine = medicines?.find((m) => m.id.toString() === formData.medicine_id);
+
+  // Calculate barcode preview
+  const barcodePreview = selectedMedicine && formData.batch_id && formData.expiry_date
+    ? `${selectedMedicine.barcode}-BATCH${formData.batch_id}-EXP${formData.expiry_date.replace(/-/g, '')}`
+    : null;
+
   const addStockMutation = useMutation({
     mutationFn: async (data: AddStockFormData) => {
       const response = await fetch("/api/inventory", {
@@ -101,10 +126,15 @@ export default function Inventory() {
       if (!response.ok) throw new Error("Failed to add stock");
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
       queryClient.invalidateQueries({ queryKey: ["medicines"] });
       setIsAddStockOpen(false);
+      setGeneratedBarcode(data.batch_barcode || null);
+
+      // Open print dialog
+      setPrintBarcodeOpen(true);
+
       setFormData({
         medicine_id: "",
         batch_id: "",
@@ -114,9 +144,10 @@ export default function Inventory() {
         expiry_date: "",
         supplier_id: "1",
       });
+      setSearchTerm("");
       toast({
         title: "Success",
-        description: "Stock added successfully",
+        description: `Stock added successfully! Batch barcode: ${data.batch_barcode || 'N/A'}`,
       });
     },
     onError: (error) => {
@@ -125,12 +156,197 @@ export default function Inventory() {
         description: error instanceof Error ? error.message : "Failed to add stock",
         variant: "destructive",
       });
+
+      const updateInventoryMutation = useMutation({
+        mutationFn: async ({ id, data }: { id: number; data: Partial<AddStockFormData> }) => {
+          const response = await fetch(`/api/inventory/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+          if (!response.ok) throw new Error("Failed to update inventory");
+          return response.json();
+        },
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ["inventory"] });
+          queryClient.invalidateQueries({ queryKey: ["medicines"] });
+          setIsEditMode(false);
+          setEditingItem(null);
+          setFormData({
+            medicine_id: "",
+            batch_id: "",
+            quantity: "",
+            price: "",
+            manufacturing_date: "",
+            expiry_date: "",
+            supplier_id: "1",
+          });
+          toast({
+            title: "Success",
+            description: "Inventory updated successfully",
+          });
+        },
+        onError: (error) => {
+          toast({
+            title: "Error",
+            description: error instanceof Error ? error.message : "Failed to update inventory",
+            variant: "destructive",
+          });
+        },
+      });
+    },
+  });
+
+  const deleteInventoryMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/inventory/${id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete inventory");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["medicines"] });
+      setDeleteConfirmOpen(false);
+      setItemToDelete(null);
+      toast({
+        title: "Success",
+        description: "Inventory item deleted successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete inventory",
+        variant: "destructive",
+      });
     },
   });
 
   const handleAddStock = (e: React.FormEvent) => {
     e.preventDefault();
-    addStockMutation.mutate(formData);
+    if (isEditMode && editingItem) {
+      updateInventoryMutation.mutate({ id: editingItem.id, data: formData });
+    } else {
+      addStockMutation.mutate(formData);
+    }
+  };
+
+  const handleEditItem = (item: InventoryItem) => {
+    setIsEditMode(true);
+    setEditingItem(item);
+    setFormData({
+      medicine_id: item.medicine_id.toString(),
+      batch_id: item.batch_id,
+      quantity: item.quantity.toString(),
+      price: item.price.toString(),
+      manufacturing_date: item.manufacturing_date || "",
+      expiry_date: item.expiry_date,
+      supplier_id: "1",
+    });
+    setIsAddStockOpen(true);
+  };
+
+  const handleDeleteClick = (item: InventoryItem) => {
+    setItemToDelete(item);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (itemToDelete) {
+      deleteInventoryMutation.mutate(itemToDelete.id);
+    }
+  };
+
+  const handlePrintBarcode = () => {
+    if (!generatedBarcode) return;
+
+    // Get the barcode SVG element
+    const barcodeElement = document.getElementById('barcode-to-print');
+    if (!barcodeElement) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Print Barcode Label</title>
+          <style>
+            @page {
+              size: 4in 2in;
+              margin: 0;
+            }
+            body {
+              font-family: Arial, sans-serif;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              margin: 0;
+              padding: 10px;
+            }
+            .barcode-label {
+              border: 2px solid #000;
+              padding: 15px;
+              text-align: center;
+              background: white;
+              max-width: 4in;
+            }
+            .label-title {
+              font-size: 10px;
+              font-weight: bold;
+              margin-bottom: 8px;
+              text-transform: uppercase;
+            }
+            .barcode-container {
+              margin: 10px 0;
+            }
+            .barcode-text {
+              font-family: 'Courier New', monospace;
+              font-size: 9px;
+              margin-top: 5px;
+              word-break: break-all;
+            }
+            .instructions {
+              font-size: 8px;
+              color: #666;
+              margin-top: 8px;
+            }
+            @media print {
+              body { 
+                margin: 0;
+                padding: 0;
+              }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="barcode-label">
+            <div class="label-title">Pharmacy Batch Label</div>
+            <div class="barcode-container">
+              ${barcodeElement.innerHTML}
+            </div>
+            <div class="barcode-text">${generatedBarcode}</div>
+            <div class="instructions">Scan for inventory tracking</div>
+          </div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 500);
+              window.onafterprint = function() {
+                window.close();
+              };
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   if (isLoading) {
@@ -203,6 +419,9 @@ export default function Inventory() {
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-900">
                     Status
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-900">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -259,6 +478,28 @@ export default function Inventory() {
                                 : "Out of Stock"}
                         </span>
                       </td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEditItem(item)}
+                            className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteClick(item)}
+                            className="text-red-600 border-red-300 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -271,27 +512,57 @@ export default function Inventory() {
       <Dialog open={isAddStockOpen} onOpenChange={setIsAddStockOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add New Stock</DialogTitle>
+            <DialogTitle>{isEditMode ? "Edit Inventory" : "Add New Stock"}</DialogTitle>
             <DialogDescription>
-              Add new batch of medicines to inventory.
+              {isEditMode ? "Update inventory batch details." : "Add new batch of medicines to inventory."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddStock} className="space-y-4">
             <div className="space-y-2">
               <Label>Medicine</Label>
-              <select
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                value={formData.medicine_id}
-                onChange={(e) => setFormData({ ...formData, medicine_id: e.target.value })}
-                required
-              >
-                <option value="">Select Medicine</option>
-                {medicines?.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.medicine_name}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <Input
+                  value={selectedMedicine ? selectedMedicine.medicine_name : searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setFormData({ ...formData, medicine_id: "" });
+                    setShowMedicineDropdown(true);
+                  }}
+                  onFocus={() => setShowMedicineDropdown(true)}
+                  placeholder="Search by name, barcode, or manufacturer..."
+                  required={!formData.medicine_id}
+                />
+                {showMedicineDropdown && searchTerm && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                    {filteredMedicines.length > 0 ? (
+                      filteredMedicines.map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          className="w-full px-4 py-2 text-left hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none"
+                          onClick={() => {
+                            setFormData({ ...formData, medicine_id: m.id.toString() });
+                            setSearchTerm("");
+                            setShowMedicineDropdown(false);
+                          }}
+                        >
+                          <div className="font-medium text-slate-900">{m.medicine_name}</div>
+                          <div className="text-xs text-slate-500">
+                            {m.manufacturer} | Barcode: {m.barcode || 'N/A'}
+                          </div>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-2 text-slate-500">No medicines found</div>
+                    )}
+                  </div>
+                )}
+              </div>
+              {selectedMedicine && (
+                <div className="text-sm text-emerald-600">
+                  ✓ Selected: {selectedMedicine.medicine_name}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -364,6 +635,14 @@ export default function Inventory() {
               </select>
             </div>
 
+            {/* Barcode Preview */}
+            {barcodePreview && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="text-sm font-medium text-blue-900 mb-1">Batch Barcode Preview:</div>
+                <div className="font-mono text-xs text-blue-700 break-all">{barcodePreview}</div>
+              </div>
+            )}
+
             <Button
               type="submit"
               className="w-full bg-emerald-600 hover:bg-emerald-700"
@@ -372,6 +651,94 @@ export default function Inventory() {
               {addStockMutation.isPending ? "Adding..." : "Add Stock"}
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print Barcode Dialog */}
+      <Dialog open={printBarcodeOpen} onOpenChange={setPrintBarcodeOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Barcode Generated Successfully</DialogTitle>
+            <DialogDescription>
+              Your batch barcode has been generated. You can print it to paste on medicine packages.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-md">
+              <div className="text-sm font-medium text-slate-700 mb-3 text-center">Generated Barcode:</div>
+              <div className="flex justify-center bg-white p-4 rounded border border-slate-300">
+                {generatedBarcode && (
+                  <div id="barcode-to-print" className="max-w-full overflow-hidden">
+                    <Barcode
+                      value={generatedBarcode}
+                      width={1.1}
+                      height={50}
+                      fontSize={10}
+                      margin={2}
+                      displayValue={false}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="text-xs text-slate-500 mt-2 text-center font-mono break-all">
+                {generatedBarcode}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={handlePrintBarcode}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Print Barcode
+              </Button>
+              <Button
+                onClick={() => setPrintBarcodeOpen(false)}
+                variant="outline"
+                className="flex-1"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Delete</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this inventory item?
+            </DialogDescription>
+          </DialogHeader>
+          {itemToDelete && (
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-md">
+              <div className="text-sm">
+                <p className="font-medium text-slate-900">{itemToDelete.medicine_name}</p>
+                <p className="text-slate-600">Batch: {itemToDelete.batch_id}</p>
+                <p className="text-slate-600">Quantity: {itemToDelete.quantity} units</p>
+              </div>
+            </div>
+          )}
+          <div className="flex gap-2 mt-4">
+            <Button
+              onClick={handleConfirmDelete}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+              disabled={deleteInventoryMutation.isPending}
+            >
+              {deleteInventoryMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
+            <Button
+              onClick={() => setDeleteConfirmOpen(false)}
+              variant="outline"
+              className="flex-1"
+              disabled={deleteInventoryMutation.isPending}
+            >
+              Cancel
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>

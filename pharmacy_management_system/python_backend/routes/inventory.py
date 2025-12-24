@@ -144,27 +144,44 @@ def create_inventory_item():
         
         medicine_id = data.get('medicine_id')
         quantity = int(data.get('quantity'))
+        batch_id = data.get('batch_id')
+        expiry_date = data.get('expiry_date')
         
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=extras.RealDictCursor)
         
-        # 1. Insert into inventory (now with manufacturing_date)
+        # Fetch medicine barcode for batch barcode generation
+        med_query = "SELECT barcode FROM medicines WHERE id = %s"
+        cursor.execute(med_query, (medicine_id,))
+        medicine = cursor.fetchone()
+        
+        if not medicine or not medicine.get('barcode'):
+            conn.rollback()
+            return jsonify({'error': 'Medicine not found or has no barcode'}), 404
+        
+        # Generate batch barcode: {medicine_barcode}-BATCH{batch_id}-EXP{YYYYMMDD}
+        medicine_barcode = medicine['barcode']
+        expiry_formatted = expiry_date.replace('-', '') if expiry_date else 'NOEXP'
+        batch_barcode = f"{medicine_barcode}-BATCH{batch_id}-EXP{expiry_formatted}"
+        
+        # 1. Insert into inventory with batch barcode
         inv_query = """
             INSERT INTO inventory (
                 medicine_id, batch_id, quantity, expiry_date, 
-                manufacturing_date, supplier_id, price
+                manufacturing_date, supplier_id, price, batch_barcode
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING *
         """
         inv_params = (
             medicine_id,
-            data.get('batch_id'),
+            batch_id,
             quantity,
-            data.get('expiry_date'),
+            expiry_date,
             data.get('manufacturing_date'),
             data.get('supplier_id'),
-            data.get('price')
+            data.get('price'),
+            batch_barcode
         )
         
         cursor.execute(inv_query, inv_params)
@@ -243,6 +260,80 @@ def delete_inventory_item(inventory_id):
     except Exception as e:
         logger.error(f"Error deleting inventory item: {e}")
         return jsonify({'error': 'Failed to delete inventory item'}), 500
+
+@inventory_bp.route('/barcode/<barcode>', methods=['GET'])
+def lookup_by_barcode(barcode):
+    """Look up inventory batch by barcode and validate expiry"""
+    try:
+        from datetime import datetime, date
+        
+        # Try to find batch by batch_barcode first
+        query = """
+            SELECT i.*, m.medicine_name, m.manufacturer, m.category, m.price as medicine_price
+            FROM inventory i
+            JOIN medicines m ON i.medicine_id = m.id
+            WHERE i.batch_barcode = %s
+        """
+        batch = execute_query(query, (barcode,), fetch_one=True)
+        
+        if not batch:
+            # If not found, try medicine barcode (get all batches for that medicine)
+            query = """
+                SELECT i.*, m.medicine_name, m.manufacturer, m.category, m.price as medicine_price
+                FROM inventory i
+                JOIN medicines m ON i.medicine_id = m.id
+                WHERE m.barcode = %s AND i.quantity > 0
+                ORDER BY i.expiry_date ASC
+            """
+            batches = execute_query(query, (barcode,))
+            
+            if not batches:
+                return jsonify({'error': 'No inventory found for this barcode'}), 404
+            
+            # Return first non-expired batch (FIFO)
+            today = date.today()
+            for batch in batches:
+                expiry = batch.get('expiry_date')
+                if expiry:
+                    if isinstance(expiry, str):
+                        expiry = datetime.strptime(expiry, '%Y-%m-%d').date()
+                    
+                    batch['is_expired'] = expiry < today
+                    batch['days_until_expiry'] = (expiry - today).days
+                else:
+                    batch['is_expired'] = False
+                    batch['days_until_expiry'] = None
+            
+            # Find first non-expired batch
+            non_expired = [b for b in batches if not b['is_expired']]
+            if non_expired:
+                batch = non_expired[0]
+                batch['alternative_batches'] = len(batches) - 1
+            else:
+                # All expired, return first with warning
+                batch = batches[0]
+                batch['all_expired'] = True
+                batch['alternative_batches'] = len(batches) - 1
+        else:
+            # Single batch found, check expiry
+            expiry = batch.get('expiry_date')
+            today = date.today()
+            
+            if expiry:
+                if isinstance(expiry, str):
+                    expiry = datetime.strptime(expiry, '%Y-%m-%d').date()
+                
+                batch['is_expired'] = expiry < today
+                batch['days_until_expiry'] = (expiry - today).days
+            else:
+                batch['is_expired'] = False
+                batch['days_until_expiry'] = None
+        
+        return jsonify(batch), 200
+        
+    except Exception as e:
+        logger.error(f"Error looking up barcode: {e}")
+        return jsonify({'error': 'Failed to lookup barcode', 'details': str(e)}), 500
 
 @inventory_bp.route('/thresholds', methods=['POST'])
 def set_threshold():
