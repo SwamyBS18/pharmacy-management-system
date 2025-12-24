@@ -2,8 +2,16 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
-import { Search, Camera, X } from "lucide-react";
+import { Search, Camera, X, Video, Keyboard, AlertCircle } from "lucide-react";
 import JsBarcode from "jsbarcode";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Medicine {
   id: number;
@@ -16,6 +24,9 @@ interface Medicine {
   composition?: string;
   uses?: string;
   image_url?: string;
+  batch_id?: string;
+  expiry_date?: string;
+  is_expired?: boolean;
 }
 
 // Barcode Image Component
@@ -25,8 +36,6 @@ function BarcodeImage({ barcode }: { barcode: string }) {
   useEffect(() => {
     if (canvasRef.current && barcode) {
       try {
-        // Use CODE128 format - universal compatibility with all scanners
-        // Better for mobile phone cameras and barcode scanners
         JsBarcode(canvasRef.current, barcode, {
           format: "CODE128",
           width: 2.5,
@@ -36,12 +45,6 @@ function BarcodeImage({ barcode }: { barcode: string }) {
           fontSize: 16,
           background: "#ffffff",
           lineColor: "#000000",
-          // High quality settings for better scanning
-          valid: function(valid) {
-            if (!valid) {
-              console.warn("Invalid barcode:", barcode);
-            }
-          }
         });
       } catch (error) {
         console.error("Barcode generation error:", error);
@@ -53,7 +56,7 @@ function BarcodeImage({ barcode }: { barcode: string }) {
     <div className="inline-block bg-white p-3 rounded-lg border-2 border-slate-300 shadow-sm">
       <canvas
         ref={canvasRef}
-        style={{ 
+        style={{
           imageRendering: "crisp-edges",
           maxWidth: "100%",
           height: "auto",
@@ -65,23 +68,71 @@ function BarcodeImage({ barcode }: { barcode: string }) {
 }
 
 export default function BarcodeScanner() {
+  const [scanMode, setScanMode] = useState<"usb" | "webcam">("usb");
   const [barcodeInput, setBarcodeInput] = useState("");
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameras, setCameras] = useState<{ id: string; label: string }[]>([]);
+  const [selectedCamera, setSelectedCamera] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
 
-  // Focus input on mount for keyboard scanning
+  // Get available cameras
   useEffect(() => {
-    inputRef.current?.focus();
+    Html5Qrcode.getCameras()
+      .then((devices) => {
+        if (devices && devices.length) {
+          setCameras(devices.map(d => ({ id: d.id, label: d.label || `Camera ${d.id}` })));
+          setSelectedCamera(devices[0].id);
+        }
+      })
+      .catch((err) => {
+        console.error("Error getting cameras:", err);
+      });
   }, []);
 
-  const { data: medicine, isLoading, error, refetch } = useQuery<Medicine>({
-    queryKey: ["medicine", scannedBarcode],
+  // Focus input on mount for USB scanning
+  useEffect(() => {
+    if (scanMode === "usb") {
+      inputRef.current?.focus();
+    }
+  }, [scanMode]);
+
+  const { data: medicine, isLoading, error } = useQuery<Medicine>({
+    queryKey: ["barcode-lookup", scannedBarcode],
     queryFn: async () => {
       if (!scannedBarcode) return null;
+
+      // Try inventory barcode lookup first (for batch barcodes)
+      try {
+        const invResponse = await fetch(`/api/inventory/barcode/${scannedBarcode}`);
+        if (invResponse.ok) {
+          const invData = await invResponse.json();
+          // Convert inventory data to medicine format
+          return {
+            id: invData.medicine_id,
+            medicine_name: invData.medicine_name,
+            manufacturer: invData.manufacturer,
+            price: invData.price || invData.medicine_price,
+            stock: invData.quantity,
+            category: invData.category,
+            barcode: invData.batch_barcode || scannedBarcode,
+            composition: "",
+            uses: "",
+            batch_id: invData.batch_id,
+            expiry_date: invData.expiry_date,
+            is_expired: invData.is_expired,
+          };
+        }
+      } catch (err) {
+        console.log("Not a batch barcode, trying medicine barcode...");
+      }
+
+      // Try medicine barcode lookup
       const response = await fetch(`/api/medicines/barcode/${scannedBarcode}`);
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error("Medicine not found");
+          throw new Error("Medicine or batch not found");
         }
         throw new Error("Failed to fetch medicine");
       }
@@ -89,6 +140,61 @@ export default function BarcodeScanner() {
     },
     enabled: !!scannedBarcode,
   });
+
+  const startWebcamScanning = async () => {
+    if (!selectedCamera) return;
+
+    try {
+      const html5QrCode = new Html5Qrcode("qr-reader", {
+        verbose: false,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+        ]
+      });
+      html5QrCodeRef.current = html5QrCode;
+
+      await html5QrCode.start(
+        selectedCamera,
+        {
+          fps: 10,
+          qrbox: { width: 300, height: 150 },
+          aspectRatio: 2.0,
+        },
+        (decodedText) => {
+          console.log("Scanned:", decodedText);
+          setScannedBarcode(decodedText);
+          stopWebcamScanning();
+        },
+        (errorMessage) => {
+          // Silently ignore scanning errors
+        }
+      );
+
+      setIsCameraActive(true);
+    } catch (err) {
+      console.error("Error starting camera:", err);
+      alert("Failed to start camera. Please check permissions.");
+    }
+  };
+
+  const stopWebcamScanning = async () => {
+    if (html5QrCodeRef.current) {
+      try {
+        await html5QrCodeRef.current.stop();
+        html5QrCodeRef.current = null;
+        setIsCameraActive(false);
+      } catch (err) {
+        console.error("Error stopping camera:", err);
+      }
+    }
+  };
 
   const handleScan = () => {
     if (barcodeInput.trim()) {
@@ -106,54 +212,155 @@ export default function BarcodeScanner() {
   const handleClear = () => {
     setBarcodeInput("");
     setScannedBarcode(null);
-    inputRef.current?.focus();
+    if (scanMode === "usb") {
+      inputRef.current?.focus();
+    }
   };
+
+  const handleModeChange = (mode: "usb" | "webcam") => {
+    setScanMode(mode);
+    if (mode === "usb") {
+      stopWebcamScanning();
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopWebcamScanning();
+    };
+  }, []);
 
   return (
     <DashboardLayout title="Barcode Scanner" subtitle="Scan or enter barcode to find medicine">
       <div className="space-y-6">
-        {/* Scanner Input */}
+        {/* Scan Mode Selection */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <div className="flex gap-4 items-center">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Enter or Scan Barcode
-              </label>
-              <div className="flex gap-2">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={barcodeInput}
-                  onChange={(e) => setBarcodeInput(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Scan barcode or type barcode number..."
-                  className="flex-1 px-4 py-3 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
-                  autoFocus
-                />
-                <Button
-                  onClick={handleScan}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-6"
-                >
-                  <Search className="h-5 w-5 mr-2" />
-                  Search
-                </Button>
-                {scannedBarcode && (
-                  <Button
-                    onClick={handleClear}
-                    variant="outline"
-                    className="px-6"
-                  >
-                    <X className="h-5 w-5 mr-2" />
-                    Clear
-                  </Button>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 mt-2">
-                Tip: Connect a barcode scanner and scan directly, or type the barcode and press Enter
-              </p>
-            </div>
+          <h3 className="font-semibold text-slate-900 mb-4">Select Scanning Method</h3>
+          <div className="flex gap-4">
+            <Button
+              onClick={() => handleModeChange("usb")}
+              variant={scanMode === "usb" ? "default" : "outline"}
+              className={scanMode === "usb" ? "bg-emerald-600 hover:bg-emerald-700" : ""}
+            >
+              <Keyboard className="h-5 w-5 mr-2" />
+              USB Scanner / Manual Input
+            </Button>
+            <Button
+              onClick={() => handleModeChange("webcam")}
+              variant={scanMode === "webcam" ? "default" : "outline"}
+              className={scanMode === "webcam" ? "bg-emerald-600 hover:bg-emerald-700" : ""}
+            >
+              <Video className="h-5 w-5 mr-2" />
+              Webcam Scanner
+            </Button>
           </div>
         </div>
+
+        {/* USB Scanner Input */}
+        {scanMode === "usb" && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div className="flex gap-4 items-center">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Enter or Scan Barcode
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={barcodeInput}
+                    onChange={(e) => setBarcodeInput(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Scan barcode or type barcode number..."
+                    className="flex-1 px-4 py-3 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
+                    autoFocus
+                  />
+                  <Button
+                    onClick={handleScan}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-6"
+                  >
+                    <Search className="h-5 w-5 mr-2" />
+                    Search
+                  </Button>
+                  {scannedBarcode && (
+                    <Button
+                      onClick={handleClear}
+                      variant="outline"
+                      className="px-6"
+                    >
+                      <X className="h-5 w-5 mr-2" />
+                      Clear
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  Tip: Connect a USB barcode scanner and scan directly, or type the barcode and press Enter
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Webcam Scanner */}
+        {scanMode === "webcam" && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="block text-sm font-medium text-slate-700">
+                  Select Camera
+                </label>
+                <div className="flex gap-2">
+                  {!isCameraActive ? (
+                    <Button
+                      onClick={startWebcamScanning}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      disabled={!selectedCamera}
+                    >
+                      <Camera className="h-5 w-5 mr-2" />
+                      Start Camera
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={stopWebcamScanning}
+                      variant="outline"
+                      className="border-red-300 text-red-600 hover:bg-red-50"
+                    >
+                      <X className="h-5 w-5 mr-2" />
+                      Stop Camera
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <Select value={selectedCamera} onValueChange={setSelectedCamera} disabled={isCameraActive}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a camera" />
+                </SelectTrigger>
+                <SelectContent>
+                  {cameras.map((camera) => (
+                    <SelectItem key={camera.id} value={camera.id}>
+                      {camera.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div id="qr-reader" className="w-full max-w-md mx-auto"></div>
+
+              {scannedBarcode && (
+                <Button
+                  onClick={handleClear}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <X className="h-5 w-5 mr-2" />
+                  Clear and Scan Again
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Loading State */}
         {isLoading && scannedBarcode && (
@@ -207,7 +414,30 @@ export default function BarcodeScanner() {
                   <h2 className="text-2xl font-bold text-slate-900 mb-2">
                     {medicine.medicine_name}
                   </h2>
-                  
+
+                  {/* Batch & Expiry Alert */}
+                  {medicine.batch_id && (
+                    <div className={`mb-4 p-3 rounded-lg border ${medicine.is_expired
+                      ? "bg-red-50 border-red-200 text-red-700"
+                      : "bg-blue-50 border-blue-200 text-blue-700"
+                      }`}>
+                      <div className="flex items-center gap-2 font-semibold">
+                        {medicine.is_expired ? (
+                          <>
+                            <AlertCircle className="h-5 w-5" />
+                            <span>EXPIRED BATCH DETECTED</span>
+                          </>
+                        ) : (
+                          <span>Batch Found</span>
+                        )}
+                      </div>
+                      <div className="mt-1 text-sm grid grid-cols-2 gap-4">
+                        <div>Batch ID: <strong>{medicine.batch_id}</strong></div>
+                        <div>Expiry: <strong>{medicine.expiry_date}</strong></div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4 mt-4">
                     <div>
                       <label className="text-sm font-medium text-slate-500">Barcode</label>
@@ -234,13 +464,12 @@ export default function BarcodeScanner() {
                       <label className="text-sm font-medium text-slate-500">Stock</label>
                       <p className="text-lg">
                         <span
-                          className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                            medicine.stock > 100
-                              ? "bg-emerald-100 text-emerald-700"
-                              : medicine.stock > 50
-                                ? "bg-yellow-100 text-yellow-700"
-                                : "bg-red-100 text-red-700"
-                          }`}
+                          className={`px-3 py-1 rounded-full text-sm font-semibold ${medicine.stock > 100
+                            ? "bg-emerald-100 text-emerald-700"
+                            : medicine.stock > 50
+                              ? "bg-yellow-100 text-yellow-700"
+                              : "bg-red-100 text-red-700"
+                            }`}
                         >
                           {medicine.stock || 0} units
                         </span>
@@ -278,10 +507,10 @@ export default function BarcodeScanner() {
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
             <h3 className="font-semibold text-blue-900 mb-3">How to use the barcode scanner:</h3>
             <ul className="list-disc list-inside space-y-2 text-sm text-blue-800">
-              <li>Connect a USB barcode scanner to your computer</li>
-              <li>Click in the input field and scan the barcode</li>
-              <li>Or manually type the barcode number and press Enter</li>
-              <li>The medicine details will appear automatically after scanning</li>
+              <li><strong>USB Scanner:</strong> Connect a USB barcode scanner, click in the input field, and scan</li>
+              <li><strong>Webcam:</strong> Select your camera from the dropdown and click "Start Camera"</li>
+              <li><strong>Manual:</strong> Type the barcode number and press Enter</li>
+              <li>Medicine details will appear automatically after scanning</li>
             </ul>
           </div>
         )}
@@ -289,4 +518,3 @@ export default function BarcodeScanner() {
     </DashboardLayout>
   );
 }
-

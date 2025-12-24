@@ -42,6 +42,8 @@ interface AddStockFormData {
 interface MedicineOption {
   id: number;
   medicine_name: string;
+  barcode: string;
+  manufacturer: string;
 }
 
 interface SupplierOption {
@@ -157,42 +159,44 @@ export default function Inventory() {
         variant: "destructive",
       });
 
-      const updateInventoryMutation = useMutation({
-        mutationFn: async ({ id, data }: { id: number; data: Partial<AddStockFormData> }) => {
-          const response = await fetch(`/api/inventory/${id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
-          });
-          if (!response.ok) throw new Error("Failed to update inventory");
-          return response.json();
-        },
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ["inventory"] });
-          queryClient.invalidateQueries({ queryKey: ["medicines"] });
-          setIsEditMode(false);
-          setEditingItem(null);
-          setFormData({
-            medicine_id: "",
-            batch_id: "",
-            quantity: "",
-            price: "",
-            manufacturing_date: "",
-            expiry_date: "",
-            supplier_id: "1",
-          });
-          toast({
-            title: "Success",
-            description: "Inventory updated successfully",
-          });
-        },
-        onError: (error) => {
-          toast({
-            title: "Error",
-            description: error instanceof Error ? error.message : "Failed to update inventory",
-            variant: "destructive",
-          });
-        },
+
+    },
+  });
+
+  const updateInventoryMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<AddStockFormData> }) => {
+      const response = await fetch(`/api/inventory/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error("Failed to update inventory");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["medicines"] });
+      setIsEditMode(false);
+      setEditingItem(null);
+      setFormData({
+        medicine_id: "",
+        batch_id: "",
+        quantity: "",
+        price: "",
+        manufacturing_date: "",
+        expiry_date: "",
+        supplier_id: "1",
+      });
+      toast({
+        title: "Success",
+        description: "Inventory updated successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update inventory",
+        variant: "destructive",
       });
     },
   });

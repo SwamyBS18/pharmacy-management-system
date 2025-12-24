@@ -28,6 +28,7 @@
     "csv-parser": "^3.0.0",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
+    "html5-qrcode": "^2.3.8",
     "jsbarcode": "^3.12.1",
     "pg": "^8.13.1",
     "react-barcode": "^1.6.1",

@@ -310,7 +310,7 @@ export default function POS() {
                 >
                   <div className="flex-1">
                     <p className="text-sm font-medium text-slate-900">
-                      {item.name}
+                      {item.medicine_name}
                     </p>
                     <div className="flex items-center gap-2 mt-1">
                       <button

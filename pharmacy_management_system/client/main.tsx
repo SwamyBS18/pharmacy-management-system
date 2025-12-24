@@ -13,7 +13,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import AdminDashboard from "./pages/AdminDashboard";
-import Orders from "./pages/dashboard/Orders";
+// import Orders from "./pages/dashboard/Orders";
 import Medicines from "./pages/dashboard/Medicines";
 import Suppliers from "./pages/dashboard/Suppliers";
 import POS from "./pages/dashboard/POS";
