@@ -3,6 +3,13 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Menu,
   X,
   LogOut,
@@ -24,10 +31,10 @@ import {
 
 export default function AdminDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [alertDialogOpen, setAlertDialogOpen] = useState(false);
 
   const navigationItems = [
     { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
-    { icon: ShoppingCart, label: "Doctor Orders", href: "/dashboard/orders" },
     { icon: Pill, label: "Medicines", href: "/dashboard/medicines" },
     { icon: ScanLine, label: "Barcode Scanner", href: "/dashboard/barcode-scanner" },
     { icon: Truck, label: "Suppliers", href: "/dashboard/suppliers" },
@@ -99,9 +106,8 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-slate-100 flex">
       {/* Sidebar */}
       <aside
-        className={`${
-          sidebarOpen ? "w-64" : "w-20"
-        } bg-slate-900 text-white transition-all duration-300 fixed h-screen overflow-y-auto z-40`}
+        className={`${sidebarOpen ? "w-64" : "w-20"
+          } bg-slate-900 text-white transition-all duration-300 fixed h-screen overflow-y-auto z-40`}
       >
         {/* Logo */}
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
@@ -177,7 +183,10 @@ export default function AdminDashboard() {
 
             {/* Right Actions */}
             <div className="flex items-center gap-4">
-              <button className="relative p-2 hover:bg-slate-100 rounded-lg transition">
+              <button
+                onClick={() => setAlertDialogOpen(true)}
+                className="relative p-2 hover:bg-slate-100 rounded-lg transition"
+              >
                 <Bell className="h-6 w-6 text-slate-600" />
                 {(totalExpired > 0 || totalOutOfStock > 0) && (
                   <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
@@ -341,6 +350,130 @@ export default function AdminDashboard() {
           </div>
         </div>
       </main>
+
+      {/* Alert Dialog */}
+      <Dialog open={alertDialogOpen} onOpenChange={setAlertDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>System Alerts & Notifications</DialogTitle>
+            <DialogDescription>
+              {totalExpired + totalOutOfStock === 0
+                ? "No alerts at this time. All systems normal."
+                : `You have ${totalExpired + totalOutOfStock} alert(s) requiring attention.`
+              }
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 mt-4">
+            {/* Expired Drugs Section */}
+            {totalExpired > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertCircle className="h-5 w-5 text-orange-500" />
+                  <h3 className="font-semibold text-slate-900">
+                    Expired Drugs ({totalExpired})
+                  </h3>
+                </div>
+                <div className="space-y-2 bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  {expiredDrugs?.map((drug: any) => (
+                    <div
+                      key={drug.id}
+                      className="flex justify-between items-start p-3 bg-white rounded border border-orange-100"
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium text-slate-900">
+                          {drug.medicine_name || "Unknown Medicine"}
+                        </p>
+                        <p className="text-sm text-slate-600 mt-1">
+                          Batch: {drug.batch_id || "N/A"} |
+                          Quantity: {drug.quantity || 0} units
+                        </p>
+                        <p className="text-xs text-orange-600 mt-1">
+                          Expired: {drug.expiry_date ? new Date(drug.expiry_date).toLocaleDateString() : "N/A"}
+                        </p>
+                      </div>
+                      <Link to="/dashboard/expired">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                        >
+                          View
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+                <Link to="/dashboard/expired" className="block mt-2">
+                  <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white">
+                    View All Expired Drugs
+                  </Button>
+                </Link>
+              </div>
+            )}
+
+            {/* Out of Stock Section */}
+            {totalOutOfStock > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertCircle className="h-5 w-5 text-red-500" />
+                  <h3 className="font-semibold text-slate-900">
+                    Out of Stock ({totalOutOfStock})
+                  </h3>
+                </div>
+                <div className="space-y-2 bg-red-50 border border-red-200 rounded-lg p-4">
+                  {outOfStock?.map((item: any) => (
+                    <div
+                      key={item.id}
+                      className="flex justify-between items-start p-3 bg-white rounded border border-red-100"
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium text-slate-900">
+                          {item.medicine_name || "Unknown Medicine"}
+                        </p>
+                        <p className="text-sm text-slate-600 mt-1">
+                          Batch: {item.batch_id || "N/A"} |
+                          Stock: {item.quantity || 0} units
+                        </p>
+                        <p className="text-xs text-red-600 mt-1">
+                          ⚠️ Requires immediate restocking
+                        </p>
+                      </div>
+                      <Link to="/dashboard/out-of-stock">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 border-red-300 hover:bg-red-50"
+                        >
+                          View
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+                <Link to="/dashboard/out-of-stock" className="block mt-2">
+                  <Button className="w-full bg-red-500 hover:bg-red-600 text-white">
+                    View All Out of Stock Items
+                  </Button>
+                </Link>
+              </div>
+            )}
+
+            {/* No Alerts Message */}
+            {totalExpired === 0 && totalOutOfStock === 0 && (
+              <div className="text-center py-8">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 mb-4">
+                  <Bell className="h-8 w-8 text-emerald-600" />
+                </div>
+                <h3 className="font-semibold text-slate-900 mb-2">All Clear!</h3>
+                <p className="text-slate-600">
+                  No alerts at this time. Your inventory is in good shape.
+                </p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -47,10 +47,10 @@ const router = createBrowserRouter(
       path: "/dashboard",
       element: <AdminDashboard />,
     },
-    {
-      path: "/dashboard/orders",
-      element: <Orders />,
-    },
+    // {
+    //   path: "/dashboard/orders",
+    //   element: <Orders />,
+    // },
     {
       path: "/dashboard/medicines",
       element: <Medicines />,
