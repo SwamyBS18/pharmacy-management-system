@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import ProfileDropdown from "@/components/ProfileDropdown";
+import { api } from "@/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -129,7 +131,7 @@ export default function DashboardLayout({
         {/* Top Header */}
         <div className="bg-white border-b border-slate-200 sticky top-0 z-30">
           <div className="flex items-center justify-between p-6">
-            <div className="flex items-center gap-4 flex-1">
+            <div className="flex items-center gap-4">
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="p-2 hover:bg-slate-100 rounded-lg transition"
@@ -141,17 +143,8 @@ export default function DashboardLayout({
                 )}
               </button>
 
-              {/* Search Bar */}
-              <div className="flex-1 max-w-md">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search..."
-                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
+              {/* Pharmacy Name and User Role */}
+              <PharmacyHeader />
             </div>
 
             {/* Right Actions */}
@@ -166,12 +159,7 @@ export default function DashboardLayout({
                 )}
               </button>
 
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-slate-100 transition">
-                <User className="h-5 w-5 text-slate-600" />
-                <span className="text-sm font-medium text-slate-900">
-                  Admin
-                </span>
-              </button>
+              <ProfileDropdown />
             </div>
           </div>
         </div>
@@ -320,6 +308,47 @@ export default function DashboardLayout({
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function PharmacyHeader() {
+  const [pharmacyData, setPharmacyData] = useState<any>(null);
+  const [userData, setUserData] = useState<any>(null);
+
+  useEffect(() => {
+    // Get user data from localStorage
+    const user = localStorage.getItem("user");
+    if (user) {
+      setUserData(JSON.parse(user));
+    }
+
+    // Fetch pharmacy profile
+    api.pharmacy.getProfile()
+      .then((response) => {
+        setPharmacyData(response.data);
+      })
+      .catch((error) => {
+        console.error("Error fetching pharmacy profile:", error);
+      });
+  }, []);
+
+  if (!pharmacyData || !userData) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="h-4 w-48 bg-slate-200 rounded animate-pulse"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h2 className="text-lg font-semibold text-slate-900">
+        Welcome to {pharmacyData.pharmacy_name}
+      </h2>
+      <p className="text-sm text-slate-600">
+        {userData.role === "ADMIN" ? "Administrator" : "Employee"}
+      </p>
     </div>
   );
 }
