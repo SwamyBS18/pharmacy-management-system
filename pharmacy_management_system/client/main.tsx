@@ -8,12 +8,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
+import { AuthProvider } from "@/lib/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import CompleteProfile from "./pages/CompleteProfile";
 import AdminDashboard from "./pages/AdminDashboard";
-// import Orders from "./pages/dashboard/Orders";
 import Medicines from "./pages/dashboard/Medicines";
 import Suppliers from "./pages/dashboard/Suppliers";
 import POS from "./pages/dashboard/POS";
@@ -44,56 +46,108 @@ const router = createBrowserRouter(
       element: <Signup />,
     },
     {
-      path: "/dashboard",
-      element: <AdminDashboard />,
+      path: "/complete-profile",
+      element: (
+        <ProtectedRoute>
+          <CompleteProfile />
+        </ProtectedRoute>
+      ),
     },
-    // {
-    //   path: "/dashboard/orders",
-    //   element: <Orders />,
-    // },
+    {
+      path: "/dashboard",
+      element: (
+        <ProtectedRoute>
+          <AdminDashboard />
+        </ProtectedRoute>
+      ),
+    },
     {
       path: "/dashboard/medicines",
-      element: <Medicines />,
+      element: (
+        <ProtectedRoute>
+          <Medicines />
+        </ProtectedRoute>
+      ),
     },
     {
       path: "/dashboard/suppliers",
-      element: <Suppliers />,
+      element: (
+        <ProtectedRoute>
+          <Suppliers />
+        </ProtectedRoute>
+      ),
     },
     {
       path: "/dashboard/pos",
-      element: <POS />,
+      element: (
+        <ProtectedRoute>
+          <POS />
+        </ProtectedRoute>
+      ),
     },
     {
       path: "/dashboard/inventory",
-      element: <Inventory />,
+      element: (
+        <ProtectedRoute>
+          <Inventory />
+        </ProtectedRoute>
+      ),
     },
     {
       path: "/dashboard/expired",
-      element: <Expired />,
+      element: (
+        <ProtectedRoute>
+          <Expired />
+        </ProtectedRoute>
+      ),
     },
     {
       path: "/dashboard/out-of-stock",
-      element: <OutOfStock />,
+      element: (
+        <ProtectedRoute>
+          <OutOfStock />
+        </ProtectedRoute>
+      ),
     },
     {
       path: "/dashboard/sales-report",
-      element: <SalesReport />,
+      element: (
+        <ProtectedRoute>
+          <SalesReport />
+        </ProtectedRoute>
+      ),
     },
     {
       path: "/dashboard/users",
-      element: <Users />,
+      element: (
+        <ProtectedRoute requireAdmin>
+          <Users />
+        </ProtectedRoute>
+      ),
     },
     {
       path: "/dashboard/customers",
-      element: <Customers />,
+      element: (
+        <ProtectedRoute>
+          <Customers />
+        </ProtectedRoute>
+      ),
     },
     {
       path: "/dashboard/settings",
-      element: <Settings />,
+      element: (
+        <ProtectedRoute>
+          <Settings />
+        </ProtectedRoute>
+      ),
     },
     {
       path: "/dashboard/barcode-scanner",
-      element: <BarcodeScanner />,
+      element: (
+        <ProtectedRoute>
+          <BarcodeScanner />
+        </ProtectedRoute>
+      ),
     },
     {
       path: "*",
@@ -111,11 +165,13 @@ const router = createBrowserRouter(
 const App = () => (
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <RouterProvider router={router} />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <RouterProvider router={router} />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   </React.StrictMode>
 );

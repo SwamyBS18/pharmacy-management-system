@@ -1,6 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Trash2, Pill, User, CreditCard, Receipt } from "lucide-react";
+import { Search, Plus, Trash2, Pill, User, CreditCard, Receipt, Download, Printer } from "lucide-react";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -50,6 +50,8 @@ export default function POS() {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [discount, setDiscount] = useState(0);
   const [notes, setNotes] = useState("");
+  const [lastSale, setLastSale] = useState<any>(null);
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: medicinesData, isLoading } = useQuery<{
@@ -189,6 +191,7 @@ export default function POS() {
       return response.json();
     },
     onSuccess: (data) => {
+      setLastSale(data);
       toast.success(`Sale completed! Invoice: ${data.invoice_number}`);
       setCart([]);
       setCheckoutOpen(false);
@@ -197,6 +200,7 @@ export default function POS() {
       setCustomerPhone("");
       setDiscount(0);
       setNotes("");
+      setInvoiceDialogOpen(true);
       queryClient.invalidateQueries({ queryKey: ["medicines"] });
       queryClient.invalidateQueries({ queryKey: ["sales"] });
     },
@@ -491,6 +495,75 @@ export default function POS() {
               {checkoutMutation.isPending ? "Processing..." : "Confirm Sale"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invoice Success Dialog */}
+      <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>✅ Sale Completed Successfully!</DialogTitle>
+            <DialogDescription>
+              Your invoice has been generated and is ready to download
+            </DialogDescription>
+          </DialogHeader>
+
+          {lastSale && (
+            <div className="space-y-4">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Invoice Number:</span>
+                    <span className="font-semibold text-slate-900">{lastSale.invoice_number}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Total Amount:</span>
+                    <span className="font-semibold text-emerald-600">₹{Number(lastSale.final_amount).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Payment Method:</span>
+                    <span className="font-medium text-slate-900 capitalize">{lastSale.payment_method}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    const url = `/api/billing/invoice/${lastSale.id}`;
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.download = `invoice_${lastSale.invoice_number}.pdf`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Invoice
+                </Button>
+                <Button
+                  onClick={() => {
+                    window.open(`/api/billing/invoice/${lastSale.id}`, "_blank");
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  <Printer className="h-4 w-4 mr-2" />
+                  Print
+                </Button>
+              </div>
+
+              <Button
+                onClick={() => setInvoiceDialogOpen(false)}
+                variant="outline"
+                className="w-full"
+              >
+                Close
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </DashboardLayout>

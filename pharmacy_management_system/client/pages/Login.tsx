@@ -33,24 +33,25 @@ export default function Login() {
         return;
       }
 
-      // TODO: Replace with actual API call to backend when ready
-      // For now, basic validation for demo purposes
-      if (formData.email.includes("@") && formData.password.length >= 6) {
-        // Simulate successful login
-        localStorage.setItem(
-          "user",
-          JSON.stringify({
-            email: formData.email,
-            loginTime: new Date().toISOString(),
-          }),
-        );
-        navigate("/dashboard");
+      // Login via API
+      const { api } = await import("@/lib/api");
+      const response = await api.auth.login({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      // Store token and user data
+      localStorage.setItem("auth_token", response.data.token);
+      localStorage.setItem("user", JSON.stringify(response.data.user));
+
+      // Force redirect using window.location for reliability
+      if (!response.data.user.is_profile_complete) {
+        window.location.href = "/complete-profile";
       } else {
-        setError("Invalid email or password");
+        window.location.href = "/dashboard";
       }
-    } catch (err) {
-      setError("Login failed. Please try again.");
-    } finally {
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Login failed. Please try again.");
       setLoading(false);
     }
   };

@@ -217,6 +217,8 @@ def create_sale():
         
         result = dict(complete_sale)
         result['items'] = sale_items
+        result['invoice_url'] = f'/api/billing/invoice/{sale["id"]}'
+        result['download_url'] = f'/api/billing/download/{sale["id"]}'
         
         return jsonify(result), 201
     except Exception as e:

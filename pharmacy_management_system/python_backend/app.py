@@ -33,6 +33,8 @@ def create_app():
         logger.info(f"📥 {request.method} {request.path}")
     
     # Register blueprints
+    from routes.auth import auth_bp
+    from routes.pharmacy import pharmacy_bp
     from routes.suppliers import suppliers_bp
     from routes.medicines import medicines_bp
     from routes.inventory import inventory_bp
@@ -42,7 +44,10 @@ def create_app():
     from routes.sales import sales_bp
     from routes.prescriptions import prescriptions_bp
     from routes.dashboard import dashboard_bp
+    from routes.billing import billing_bp
     
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(pharmacy_bp, url_prefix='/api/pharmacy')
     app.register_blueprint(suppliers_bp, url_prefix='/api/suppliers')
     app.register_blueprint(medicines_bp, url_prefix='/api/medicines')
     app.register_blueprint(inventory_bp, url_prefix='/api/inventory')
@@ -52,6 +57,7 @@ def create_app():
     app.register_blueprint(sales_bp, url_prefix='/api/sales')
     app.register_blueprint(prescriptions_bp, url_prefix='/api/prescriptions')
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+    app.register_blueprint(billing_bp, url_prefix='/api/billing')
     
     # Health check endpoint
     @app.route('/api/health', methods=['GET'])
@@ -89,6 +95,8 @@ def create_app():
             'status': 'running',
             'endpoints': {
                 'health': '/api/health',
+                'auth': '/api/auth',
+                'pharmacy': '/api/pharmacy',
                 'suppliers': '/api/suppliers',
                 'medicines': '/api/medicines',
                 'inventory': '/api/inventory',
@@ -97,7 +105,8 @@ def create_app():
                 'users': '/api/users',
                 'sales': '/api/sales',
                 'prescriptions': '/api/prescriptions',
-                'dashboard': '/api/dashboard'
+                'dashboard': '/api/dashboard',
+                'billing': '/api/billing'
             }
         }), 200
     
@@ -105,6 +114,14 @@ def create_app():
     @app.errorhandler(404)
     def not_found(error):
         return jsonify({'error': 'Endpoint not found'}), 404
+    
+    @app.errorhandler(401)
+    def unauthorized(error):
+        return jsonify({'error': 'Unauthorized access'}), 401
+    
+    @app.errorhandler(403)
+    def forbidden(error):
+        return jsonify({'error': 'Access forbidden'}), 403
     
     @app.errorhandler(500)
     def internal_error(error):

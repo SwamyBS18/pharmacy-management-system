@@ -13,7 +13,6 @@ import {
 import {
   Menu,
   X,
-  LogOut,
   LayoutDashboard,
   Pill,
   ShoppingCart,
@@ -120,12 +119,7 @@ export default function DashboardLayout({
         </nav>
 
         {/* Logout */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
-          <button className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-            <LogOut className="h-5 w-5 flex-shrink-0" />
-            {sidebarOpen && <span className="text-sm font-medium">Logout</span>}
-          </button>
-        </div>
+
       </aside>
 
       {/* Main Content */}

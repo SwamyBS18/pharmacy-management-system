@@ -52,25 +52,31 @@ export default function Signup() {
         return;
       }
 
-      // TODO: Replace with actual API call to backend when ready
-      // For now, basic validation for demo purposes
-      if (formData.email.includes("@") && formData.password.length >= 8) {
-        // Simulate successful signup
-        localStorage.setItem(
-          "user",
-          JSON.stringify({
-            pharmacyName: formData.pharmacyName,
-            email: formData.email,
-            signupTime: new Date().toISOString(),
-          }),
-        );
-        navigate("/dashboard");
-      } else {
-        setError("Invalid data. Please check your inputs");
+      // Check if pharmacy already exists
+      const { api } = await import("@/lib/api");
+      const checkResponse = await api.auth.checkPharmacy();
+
+      if (checkResponse.data.exists) {
+        setError("A pharmacy is already registered. Only one pharmacy allowed per system.");
+        setLoading(false);
+        return;
       }
-    } catch (err) {
-      setError("Signup failed. Please try again.");
-    } finally {
+
+      // Register pharmacy
+      const response = await api.auth.registerPharmacy({
+        pharmacy_name: formData.pharmacyName,
+        email: formData.email,
+        password: formData.password,
+      });
+
+      // Store token and user data
+      localStorage.setItem("auth_token", response.data.token);
+      localStorage.setItem("user", JSON.stringify(response.data.user));
+
+      // Force redirect using window.location for reliability
+      window.location.href = "/complete-profile";
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Registration failed. Please try again.");
       setLoading(false);
     }
   };
@@ -207,11 +213,10 @@ export default function Signup() {
                   {passwordRequirements.map((req, idx) => (
                     <div key={idx} className="flex items-center gap-2 text-sm">
                       <div
-                        className={`flex h-4 w-4 items-center justify-center rounded-full ${
-                          req.met
-                            ? "bg-emerald-100 text-emerald-600"
-                            : "bg-slate-200 text-slate-400"
-                        }`}
+                        className={`flex h-4 w-4 items-center justify-center rounded-full ${req.met
+                          ? "bg-emerald-100 text-emerald-600"
+                          : "bg-slate-200 text-slate-400"
+                          }`}
                       >
                         {req.met && <Check className="h-3 w-3" />}
                       </div>
