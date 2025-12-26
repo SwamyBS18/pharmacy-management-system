@@ -30,7 +30,7 @@ def load_model_and_data():
     try:
         # Path to model directory (relative to this file: ../../model)
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        model_dir = os.path.join(base_dir, 'pharmacy_management_system', 'model')
+        model_dir = os.path.join(base_dir, 'model')
         
         logger.info(f"Loading ML models from: {model_dir}")
 
@@ -242,13 +242,13 @@ def get_expiry_alerts():
         days = int(request.args.get('days', 90))
         
         query = """
-            SELECT m.id, m.name as medicine_name, b.batch_id, b.quantity, b.expiry_date,
-                   DATE_PART('day', b.expiry_date - CURRENT_DATE) as days_until_expiry
-            FROM batches b
-            JOIN medicines m ON b.medicine_id = m.id
-            WHERE b.expiry_date <= CURRENT_DATE + interval '%s days'
-            AND b.quantity > 0
-            ORDER BY b.expiry_date ASC
+            SELECT m.id, m.medicine_name, i.batch_id, i.quantity, i.expiry_date,
+                   DATE_PART('day', i.expiry_date - CURRENT_DATE) as days_until_expiry
+            FROM inventory i
+            JOIN medicines m ON i.medicine_id = m.id
+            WHERE i.expiry_date <= CURRENT_DATE + interval '%s days'
+            AND i.quantity > 0
+            ORDER BY i.expiry_date ASC
         """
         results = execute_query(query, (days,))
         
