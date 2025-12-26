@@ -26,3 +26,4 @@ dist-ssr
 .python_backend/venv/*
 .config/
 !.env
+

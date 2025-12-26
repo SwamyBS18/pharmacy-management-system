@@ -1,6 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit2, Trash2, UserCheck, UserX } from "lucide-react";
+import { Plus, Trash2, UserCheck, UserX } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "@/lib/api";
@@ -105,7 +105,7 @@ export default function Users() {
   });
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this user?")) return;
+    if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
     deleteUserMutation.mutate(id);
   };
 
@@ -202,8 +202,8 @@ export default function Users() {
                       <td className="px-6 py-4 text-sm text-slate-600">
                         <span
                           className={`px-2 py-1 rounded text-xs font-medium ${user.role === "ADMIN"
-                              ? "bg-purple-100 text-purple-700"
-                              : "bg-blue-100 text-blue-700"
+                            ? "bg-purple-100 text-purple-700"
+                            : "bg-blue-100 text-blue-700"
                             }`}
                         >
                           {user.role}
@@ -212,8 +212,8 @@ export default function Users() {
                       <td className="px-6 py-4 text-sm">
                         <span
                           className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${user.is_active
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "bg-red-100 text-red-700"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-red-100 text-red-700"
                             }`}
                         >
                           {user.is_active ? "Active" : "Inactive"}
@@ -230,8 +230,8 @@ export default function Users() {
                             <button
                               onClick={() => handleToggleStatus(user.id, user.is_active)}
                               className={`p-2 rounded-lg transition ${user.is_active
-                                  ? "hover:bg-orange-100 text-orange-600"
-                                  : "hover:bg-green-100 text-green-600"
+                                ? "hover:bg-orange-100 text-orange-600"
+                                : "hover:bg-green-100 text-green-600"
                                 }`}
                               title={user.is_active ? "Deactivate" : "Activate"}
                             >
@@ -244,7 +244,7 @@ export default function Users() {
                             <button
                               onClick={() => handleDelete(user.id)}
                               className="p-2 hover:bg-red-100 rounded-lg transition text-red-600"
-                              title="Delete"
+                              title="Delete User"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>

@@ -237,17 +237,23 @@ def get_sales_stats():
         start_date = request.args.get('startDate', '')
         end_date = request.args.get('endDate', '')
         
+        # Date filter for single-table queries (sales table)
         date_filter = ""
+        # Date filter for join queries (with table alias 's')
+        date_filter_join = ""
         params = []
         
         if start_date and end_date:
             date_filter = "WHERE DATE(created_at) BETWEEN %s AND %s"
+            date_filter_join = "WHERE DATE(s.created_at) BETWEEN %s AND %s"
             params = [start_date, end_date]
         elif start_date:
             date_filter = "WHERE DATE(created_at) >= %s"
+            date_filter_join = "WHERE DATE(s.created_at) >= %s"
             params = [start_date]
         elif end_date:
             date_filter = "WHERE DATE(created_at) <= %s"
+            date_filter_join = "WHERE DATE(s.created_at) <= %s"
             params = [end_date]
         
         # Total sales
@@ -278,7 +284,7 @@ def get_sales_stats():
                    SUM(si.total_price) as total_revenue
             FROM sales_items si
             JOIN sales s ON si.sale_id = s.id
-            {date_filter.replace('WHERE', 'WHERE s.') if date_filter else ''}
+            {date_filter_join if date_filter_join else 'WHERE 1=1'}
             GROUP BY si.medicine_id, si.medicine_name
             ORDER BY total_quantity DESC
             LIMIT 10

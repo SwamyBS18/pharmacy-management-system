@@ -27,6 +27,7 @@ import Users from "./pages/dashboard/Users";
 import Settings from "./pages/dashboard/Settings";
 import BarcodeScanner from "./pages/dashboard/BarcodeScanner";
 import Customers from "./pages/dashboard/Customers";
+import PredictionsDashboard from "./pages/dashboard/PredictionsDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -136,7 +137,7 @@ const router = createBrowserRouter(
     {
       path: "/dashboard/settings",
       element: (
-        <ProtectedRoute>
+        <ProtectedRoute requireAdmin>
           <Settings />
         </ProtectedRoute>
       ),
@@ -146,6 +147,14 @@ const router = createBrowserRouter(
       element: (
         <ProtectedRoute>
           <BarcodeScanner />
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: "/dashboard/predictions",
+      element: (
+        <ProtectedRoute>
+          <PredictionsDashboard />
         </ProtectedRoute>
       ),
     },

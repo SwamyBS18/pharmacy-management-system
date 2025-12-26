@@ -20,11 +20,26 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
     
-    # Enable CORS
-    CORS(app)
+    # Enable CORS with proper configuration
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": ["http://localhost:5173", "http://localhost:3000"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True
+        }
+    })
     
     # Initialize database connection pool
     init_db_pool()
+    
+    # Handle OPTIONS requests for CORS preflight
+    @app.before_request
+    def handle_preflight():
+        from flask import request
+        if request.method == 'OPTIONS':
+            response = app.make_default_options_response()
+            return response
     
     # Request logging middleware
     @app.before_request
@@ -45,6 +60,7 @@ def create_app():
     from routes.prescriptions import prescriptions_bp
     from routes.dashboard import dashboard_bp
     from routes.billing import billing_bp
+    from routes.predictions import predictions_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(pharmacy_bp, url_prefix='/api/pharmacy')
@@ -58,6 +74,7 @@ def create_app():
     app.register_blueprint(prescriptions_bp, url_prefix='/api/prescriptions')
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
     app.register_blueprint(billing_bp, url_prefix='/api/billing')
+    app.register_blueprint(predictions_bp, url_prefix='/api/predictions')
     
     # Health check endpoint
     @app.route('/api/health', methods=['GET'])
@@ -106,7 +123,8 @@ def create_app():
                 'sales': '/api/sales',
                 'prescriptions': '/api/prescriptions',
                 'dashboard': '/api/dashboard',
-                'billing': '/api/billing'
+                'billing': '/api/billing',
+                'predictions': '/api/predictions'
             }
         }), 200
     

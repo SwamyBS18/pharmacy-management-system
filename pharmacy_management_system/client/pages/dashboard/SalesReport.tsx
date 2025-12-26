@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api";
 
 export default function SalesReport() {
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
@@ -21,10 +22,9 @@ export default function SalesReport() {
       if (dateRange.start) params.append("startDate", dateRange.start);
       if (dateRange.end) params.append("endDate", dateRange.end);
       params.append("limit", "1000");
-      
-      const response = await fetch(`/api/sales?${params.toString()}`);
-      if (!response.ok) throw new Error("Failed to fetch sales");
-      return response.json();
+
+      const response = await api.sales.getAll(params);
+      return response.data;
     },
   });
 
@@ -34,24 +34,41 @@ export default function SalesReport() {
       const params = new URLSearchParams();
       if (dateRange.start) params.append("startDate", dateRange.start);
       if (dateRange.end) params.append("endDate", dateRange.end);
-      
-      const response = await fetch(`/api/sales/stats/summary?${params.toString()}`);
-      if (!response.ok) throw new Error("Failed to fetch stats");
-      return response.json();
+
+      const response = await api.sales.getStatsSummary(params);
+      return response.data;
     },
   });
 
   const sales = salesData?.data || [];
   const stats = statsData || { summary: {}, dailySales: [], topMedicines: [] };
 
+  // Debug logging
+  console.log('Sales Report Data:', {
+    salesCount: sales.length,
+    statsData,
+    dailySalesCount: stats.dailySales?.length || 0,
+    topMedicinesCount: stats.topMedicines?.length || 0
+  });
+
   // Calculate sales statistics
   const totalSales = Number(stats.summary?.total_sales || 0);
-  const totalOrders = Number(stats.summary?.total_transactions || 0);
-  const avgOrderValue = Number(stats.summary?.avg_sale || 0);
 
-  // Daily sales data
-  const dailySales = stats.dailySales || [];
-  const topMedicines = stats.topMedicines || [];
+  // Extract data exactly like AdminDashboard does
+  const dailySales = stats?.dailySales || [];
+  const topMeds = stats?.topMedicines || [];
+
+  console.log('Extracted data:', {
+    dailySalesLength: dailySales.length,
+    topMedsLength: topMeds.length,
+    dailySalesSample: dailySales[0],
+    topMedsSample: topMeds[0]
+  });
+
+  // Get today's sales (most recent day in dailySales array)
+  // dailySales is ordered by date DESC, so [0] is the most recent day
+  const todaySales = dailySales.length > 0 ? Number(dailySales[0]?.sales || 0) : 0;
+  const todayDate = dailySales.length > 0 ? dailySales[0]?.date : null;
 
   // Group sales by month for monthly view
   const monthlySales = sales.reduce((acc: any, sale: any) => {
@@ -76,6 +93,10 @@ export default function SalesReport() {
     .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime())
     .slice(-6); // Last 6 months
 
+  // Calculate monthly average sales
+  const totalMonthlySales = monthlyData.reduce((sum: number, month: any) => sum + Number(month.sales || 0), 0);
+  const avgMonthlySales = monthlyData.length > 0 ? totalMonthlySales / monthlyData.length : 0;
+
   const handleExport = () => {
     // Simple CSV export
     const csv = [
@@ -88,7 +109,7 @@ export default function SalesReport() {
         sale.payment_method,
       ].join(",")),
     ].join("\n");
-    
+
     const blob = new Blob([csv], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -138,39 +159,130 @@ export default function SalesReport() {
             <p className="text-3xl font-bold text-emerald-600 mt-2">
               ₹{totalSales.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </p>
+            <p className="text-xs text-slate-500 mt-1">For selected period</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <p className="text-sm font-medium text-slate-600">Total Orders</p>
-            <p className="text-3xl font-bold text-slate-900 mt-2">
-              {totalOrders.toLocaleString()}
+            <p className="text-sm font-medium text-slate-600">Daily Sales</p>
+            <p className="text-3xl font-bold text-blue-600 mt-2">
+              ₹{todaySales.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              {todayDate ? new Date(todayDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No data'}
             </p>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <p className="text-sm font-medium text-slate-600">Average Order Value</p>
-            <p className="text-3xl font-bold text-slate-900 mt-2">
-              ₹{avgOrderValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            <p className="text-sm font-medium text-slate-600">Monthly Sales</p>
+            <p className="text-3xl font-bold text-purple-600 mt-2">
+              ₹{avgMonthlySales.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </p>
+            <p className="text-xs text-slate-500 mt-1">Average per month</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Sales by Month */}
+          {/* Sales by Month - Line Chart */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-emerald-600" />
-              Monthly Sales
+              Monthly Sales Trend
             </h3>
             {monthlyData.length === 0 ? (
-              <div className="h-64 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg flex items-center justify-center text-slate-500">
+              <div className="h-64 bg-slate-50 rounded-lg flex items-center justify-center text-slate-500">
                 No sales data available yet
               </div>
             ) : (
-              <div className="h-64 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg flex items-center justify-center text-slate-500">
-                📊 Sales chart visualization
-                <br />
-                <span className="text-xs mt-2">
-                  {monthlyData.length} months of data available
-                </span>
+              <div className="h-64 relative">
+                <svg className="w-full h-full" viewBox="0 0 600 240" preserveAspectRatio="xMidYMid meet">
+                  {/* Grid lines */}
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <line
+                      key={i}
+                      x1="0"
+                      y1={i * 60}
+                      x2="600"
+                      y2={i * 60}
+                      stroke="#e2e8f0"
+                      strokeWidth="1"
+                    />
+                  ))}
+
+                  {/* Area fill */}
+                  <defs>
+                    <linearGradient id="salesGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity="0.05" />
+                    </linearGradient>
+                  </defs>
+
+                  {(() => {
+                    const maxSales = Math.max(...monthlyData.map((d: any) => Number(d.sales || 0)));
+                    const points = monthlyData.map((data: any, idx: number) => {
+                      const x = (idx / (monthlyData.length - 1)) * 600;
+                      const y = 240 - ((Number(data.sales) / maxSales) * 220);
+                      return { x, y, data };
+                    });
+
+                    const pathD = points.map((p, i) =>
+                      `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`
+                    ).join(' ');
+
+                    const areaD = `${pathD} L 600 240 L 0 240 Z`;
+
+                    return (
+                      <>
+                        {/* Area */}
+                        <path d={areaD} fill="url(#salesGradient)" />
+
+                        {/* Line */}
+                        <path
+                          d={pathD}
+                          fill="none"
+                          stroke="#10b981"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+
+                        {/* Data points */}
+                        {points.map((point, idx) => (
+                          <g key={idx}>
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              r="5"
+                              fill="white"
+                              stroke="#10b981"
+                              strokeWidth="3"
+                              className="hover:r-7 transition-all cursor-pointer"
+                            />
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              r="20"
+                              fill="transparent"
+                              className="cursor-pointer"
+                            >
+                              <title>
+                                {point.data.month}
+                                {'\n'}₹{Number(point.data.sales).toLocaleString()}
+                                {'\n'}{point.data.orders} orders
+                              </title>
+                            </circle>
+                          </g>
+                        ))}
+                      </>
+                    );
+                  })()}
+                </svg>
+
+                {/* X-axis labels */}
+                <div className="flex justify-between mt-2 px-1">
+                  {monthlyData.map((data: any, idx: number) => (
+                    <div key={idx} className="text-xs text-slate-500 text-center font-medium">
+                      {data.month.split(" ")[0].substring(0, 3)}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -180,36 +292,29 @@ export default function SalesReport() {
             <h3 className="font-semibold text-slate-900 mb-4">
               Top Selling Medicines
             </h3>
-            {topMedicines.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">
+            {topMeds.length === 0 ? (
+              <div className="h-64 bg-slate-50 rounded-lg flex items-center justify-center text-slate-500">
                 No sales data available
               </div>
             ) : (
-              <div className="space-y-4">
-                {topMedicines.map((medicine: any, idx: number) => (
-                  <div
-                    key={idx}
-                    className="pb-4 border-b border-slate-200 last:border-0"
-                  >
-                    <div className="flex justify-between items-center mb-2">
-                      <p className="font-medium text-slate-900">{medicine.medicine_name}</p>
-                      <p className="text-emerald-600 font-bold">
-                        {medicine.total_quantity} units
-                      </p>
+              <div className="space-y-4 max-h-64 overflow-y-auto pr-2">
+                {topMeds.map((medicine: any, idx: number) => (
+                  <div key={idx} className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-slate-700">{medicine.medicine_name}</span>
+                      <span className="text-slate-500">{medicine.total_quantity} units</span>
                     </div>
-                    <div className="w-full bg-slate-200 rounded-full h-2">
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div
-                        className="bg-gradient-to-r from-emerald-600 to-teal-600 h-2 rounded-full"
+                        className="h-full bg-blue-500 rounded-full"
                         style={{
-                          width: `${
-                            (medicine.total_quantity / (topMedicines[0]?.total_quantity || 1)) * 100
-                          }%`,
+                          width: `${(medicine.total_quantity / (topMeds[0]?.total_quantity || 1)) * 100}%`
                         }}
                       ></div>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Revenue: ₹{Number(medicine.total_revenue || 0).toFixed(2)}
-                    </p>
+                    <div className="text-xs text-slate-400 text-right">
+                      ₹{Number(medicine.total_revenue).toFixed(2)}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -225,28 +330,36 @@ export default function SalesReport() {
               </div>
             ) : (
               <div className="space-y-2">
-                {dailySales.slice(0, 30).map((day: any, idx: number) => (
-                  <div key={idx} className="flex items-center gap-4">
-                    <div className="w-24 text-sm text-slate-600">{day.date}</div>
-                    <div className="flex-1 bg-slate-200 rounded-full h-6 relative">
-                      <div
-                        className="bg-gradient-to-r from-emerald-600 to-teal-600 h-6 rounded-full flex items-center justify-end pr-2"
-                        style={{
-                          width: `${
-                            (Number(day.sales || 0) / Math.max(...dailySales.map((d: any) => Number(d.sales || 0)))) * 100
-                          }%`,
-                        }}
-                      >
-                        <span className="text-xs text-white font-medium">
-                          ₹{Number(day.sales || 0).toLocaleString()}
-                        </span>
+                {dailySales.slice(0, 30).map((day: any, idx: number) => {
+                  const formattedDate = day.date ? new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : day.date;
+                  const maxSales = Math.max(...dailySales.map((d: any) => Number(d.sales || 0)));
+                  const salesValue = Number(day.sales || 0);
+                  const widthPercent = maxSales > 0 ? (salesValue / maxSales) * 100 : 0;
+                  // Ensure minimum 5% width if there's any sales
+                  const displayWidth = salesValue > 0 ? Math.max(widthPercent, 5) : 0;
+
+                  return (
+                    <div key={idx} className="flex items-center gap-4">
+                      <div className="w-24 text-sm text-slate-600 font-medium">{formattedDate}</div>
+                      <div className="flex-1 bg-slate-200 rounded-full h-6 relative">
+                        <div
+                          className="bg-gradient-to-r from-emerald-600 to-teal-600 h-6 rounded-full flex items-center justify-end pr-2 transition-all duration-300"
+                          style={{
+                            width: `${displayWidth}%`,
+                            minWidth: salesValue > 0 ? '40px' : '0'
+                          }}
+                        >
+                          <span className="text-xs text-white font-medium">
+                            ₹{salesValue.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="w-20 text-sm text-slate-600 text-right font-medium">
+                        {day.transactions} orders
                       </div>
                     </div>
-                    <div className="w-20 text-sm text-slate-600 text-right">
-                      {day.transactions} orders
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -305,6 +418,6 @@ export default function SalesReport() {
           </div>
         </div>
       </div>
-    </DashboardLayout>
+    </DashboardLayout >
   );
 }

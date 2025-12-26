@@ -29,6 +29,7 @@ import {
   User,
   Package,
   ScanLine,
+  Brain,
 } from "lucide-react";
 
 interface DashboardLayoutProps {
@@ -67,20 +68,41 @@ export default function DashboardLayout({
   const totalExpired = expiredDrugs?.length || 0;
   const totalOutOfStock = outOfStock?.length || 0;
 
+  // Get user role from localStorage
+  const getUserRole = () => {
+    const user = localStorage.getItem("user");
+    if (user) {
+      try {
+        return JSON.parse(user).role;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const userRole = getUserRole();
+
   const navigationItems = [
-    { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
-    { icon: Pill, label: "Medicines", href: "/dashboard/medicines" },
-    { icon: ScanLine, label: "Barcode Scanner", href: "/dashboard/barcode-scanner" },
-    { icon: Truck, label: "Suppliers", href: "/dashboard/suppliers" },
-    { icon: Package, label: "POS", href: "/dashboard/pos" },
-    { icon: Package, label: "Inventory", href: "/dashboard/inventory" },
-    { icon: AlertCircle, label: "Expired Drugs", href: "/dashboard/expired" },
-    { icon: Clock, label: "Out of Stock", href: "/dashboard/out-of-stock" },
-    { icon: BarChart3, label: "Sales Report", href: "/dashboard/sales-report" },
-    { icon: Users, label: "Users", href: "/dashboard/users" },
-    { icon: User, label: "Customers", href: "/dashboard/customers" },
-    { icon: Settings, label: "Settings", href: "/dashboard/settings" },
+    { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", roles: ["ADMIN", "EMPLOYEE"] },
+    { icon: Pill, label: "Medicines", href: "/dashboard/medicines", roles: ["ADMIN", "EMPLOYEE"] },
+    { icon: ScanLine, label: "Barcode Scanner", href: "/dashboard/barcode-scanner", roles: ["ADMIN", "EMPLOYEE"] },
+    { icon: Truck, label: "Suppliers", href: "/dashboard/suppliers", roles: ["ADMIN", "EMPLOYEE"] },
+    { icon: Package, label: "POS", href: "/dashboard/pos", roles: ["ADMIN", "EMPLOYEE"] },
+    { icon: Package, label: "Inventory", href: "/dashboard/inventory", roles: ["ADMIN", "EMPLOYEE"] },
+    { icon: AlertCircle, label: "Expired Drugs", href: "/dashboard/expired", roles: ["ADMIN", "EMPLOYEE"] },
+    { icon: Clock, label: "Out of Stock", href: "/dashboard/out-of-stock", roles: ["ADMIN", "EMPLOYEE"] },
+    { icon: BarChart3, label: "Sales Report", href: "/dashboard/sales-report", roles: ["ADMIN", "EMPLOYEE"] },
+    { icon: Brain, label: "Predictions", href: "/dashboard/predictions", roles: ["ADMIN"] },
+    { icon: Users, label: "Users", href: "/dashboard/users", roles: ["ADMIN"] },
+    { icon: User, label: "Customers", href: "/dashboard/customers", roles: ["ADMIN", "EMPLOYEE"] },
+    { icon: Settings, label: "Settings", href: "/dashboard/settings", roles: ["ADMIN"] },
   ];
+
+  // Filter navigation items based on user role
+  const filteredNavigationItems = navigationItems.filter(item =>
+    item.roles.includes(userRole || "")
+  );
 
   return (
     <div className="min-h-screen bg-slate-100 flex">
@@ -103,7 +125,7 @@ export default function DashboardLayout({
 
         {/* Navigation */}
         <nav className="p-4 space-y-2">
-          {navigationItems.map((item) => {
+          {filteredNavigationItems.map((item) => {
             const Icon = item.icon;
             return (
               <Link

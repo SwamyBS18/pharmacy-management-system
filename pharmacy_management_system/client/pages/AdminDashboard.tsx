@@ -28,6 +28,7 @@ import {
   User,
   Package,
   ScanLine,
+  Brain,
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -44,64 +45,67 @@ export default function AdminDashboard() {
     { icon: AlertCircle, label: "Expired Drugs", href: "/dashboard/expired" },
     { icon: Clock, label: "Out of Stock", href: "/dashboard/out-of-stock" },
     { icon: BarChart3, label: "Sales Report", href: "/dashboard/sales-report" },
+    { icon: Brain, label: "Predictions", href: "/dashboard/predictions" },
     { icon: Users, label: "Users", href: "/dashboard/users" },
     { icon: Settings, label: "Settings", href: "/dashboard/settings" },
   ];
 
-  // Fetch real stats
-  const { data: medicinesData } = useQuery<{ data: any[]; pagination: { total: number } }>({
-    queryKey: ["medicines-stats"],
+  // Fetch dashboard stats
+  const { data: stats } = useQuery<{
+    medicines: { total: number; lowStock: number; outOfStock: number };
+    suppliers: { total: number };
+    sales: {
+      today: { amount: number; count: number };
+      thisMonth: { amount: number; count: number };
+    };
+    orders: { pending: number };
+    inventory: { expired: number; lowStock: number; outOfStock: number };
+  }>({
+    queryKey: ["dashboard-stats"],
     queryFn: async () => {
-      const response = await fetch("/api/medicines?limit=1");
-      if (!response.ok) throw new Error("Failed to fetch medicines");
-      return response.json();
+      const response = await api.dashboard.getStats();
+      return response.data;
     },
-  });
-
-  const { data: ordersData } = useQuery<{ data: any[]; pagination: { total: number } }>({
-    queryKey: ["orders-stats"],
-    queryFn: async () => {
-      const response = await fetch("/api/orders?limit=1");
-      if (!response.ok) throw new Error("Failed to fetch orders");
-      return response.json();
-    },
+    refetchInterval: 30000, // Refetch every 30 seconds
   });
 
   const { data: expiredDrugs } = useQuery<any[]>({
     queryKey: ["expired-stats"],
     queryFn: async () => {
-      const response = await fetch("/api/inventory/expired");
-      if (!response.ok) throw new Error("Failed to fetch expired drugs");
-      return response.json();
+      const response = await api.inventory.getExpired();
+      return response.data;
     },
   });
 
   const { data: outOfStock } = useQuery<any[]>({
     queryKey: ["out-of-stock-stats"],
     queryFn: async () => {
-      const response = await fetch("/api/inventory/out-of-stock");
-      if (!response.ok) throw new Error("Failed to fetch out of stock");
-      return response.json();
+      const response = await api.inventory.getOutOfStock();
+      return response.data;
     },
   });
 
-  const { data: suppliers } = useQuery<any[]>({
-    queryKey: ["suppliers-stats"],
+  const totalMedicines = stats?.medicines?.total || 0;
+  const totalExpired = stats?.inventory?.expired || 0;
+  const totalOutOfStock = stats?.inventory?.outOfStock || 0;
+  const totalSuppliers = stats?.suppliers?.total || 0;
+  const monthlySales = stats?.sales?.thisMonth?.amount || 0;
+
+  // Fetch sales stats for charts
+  const { data: salesStats } = useQuery({
+    queryKey: ["sales-stats-dashboard"],
     queryFn: async () => {
-      const response = await fetch("/api/suppliers");
-      if (!response.ok) throw new Error("Failed to fetch suppliers");
-      return response.json();
+      const response = await api.sales.getStatsSummary();
+      return response.data;
     },
   });
 
-  const totalMedicines = medicinesData?.pagination?.total || 0;
-  const totalOrders = ordersData?.pagination?.total || 0;
-  const totalExpired = expiredDrugs?.length || 0;
-  const totalOutOfStock = outOfStock?.length || 0;
-  const totalSuppliers = suppliers?.length || 0;
+  const dailyData = salesStats?.dailySales || [];
+  const topMeds = salesStats?.topMedicines?.slice(0, 5) || [];
 
-  // Calculate monthly sales (placeholder - would need sales table)
-  const monthlySales = totalOrders * 1000; // Estimate
+  // Get today's sales (most recent day in dailyData)
+  const todaySales = dailyData.length > 0 ? Number(dailyData[0]?.sales || 0) : 0;
+
 
   return (
     <div className="min-h-screen bg-slate-100 flex">
@@ -205,14 +209,14 @@ export default function AdminDashboard() {
               color="emerald"
             />
             <StatCard
-              label="Total Orders"
-              value={totalOrders.toLocaleString()}
+              label="Daily Selling"
+              value={todaySales > 1000 ? `₹${(todaySales / 1000).toFixed(1)}K` : `₹${todaySales.toLocaleString()}`}
               icon="ShoppingCart"
               color="purple"
             />
             <StatCard
               label="Monthly Sales"
-              value={`₹${(monthlySales / 1000).toFixed(1)}K`}
+              value={monthlySales > 1000 ? `₹${(monthlySales / 1000).toFixed(1)}K` : `₹${monthlySales.toLocaleString()}`}
               icon="BarChart3"
               color="orange"
             />
@@ -282,48 +286,37 @@ export default function AdminDashboard() {
               </Link>
             </div>
 
-            {/* Quick Stats */}
+            {/* AI Predictions */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-slate-900">Quick Stats</h3>
-                <BarChart3 className="h-5 w-5 text-emerald-600" />
+                <h3 className="font-semibold text-slate-900 bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                  AI Stock Predictions
+                </h3>
+                <Brain className="h-5 w-5 text-emerald-600" />
               </div>
               <div className="space-y-4">
-                <div className="flex justify-between items-center pb-4 border-b border-slate-200">
-                  <span className="text-sm text-slate-600">Total Medicines</span>
-                  <span className="font-semibold text-slate-900">{totalMedicines.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center pb-4 border-b border-slate-200">
-                  <span className="text-sm text-slate-600">Low Stock Items</span>
-                  <span className="font-semibold text-slate-900">{totalOutOfStock}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-600">Pending Orders</span>
-                  <span className="font-semibold text-slate-900">
-                    {ordersData?.data?.filter((o: any) => o.status === "pending").length || 0}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Sales Chart Placeholder */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              <h3 className="font-semibold text-slate-900 mb-4">Sales Overview</h3>
-              <div className="h-64 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg flex items-center justify-center text-slate-500">
-                📊 Sales chart will be rendered here
-              </div>
-            </div>
-
-            {/* Top Medicines Chart Placeholder */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              <h3 className="font-semibold text-slate-900 mb-4">
-                Top Selling Medicines
-              </h3>
-              <div className="h-64 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg flex items-center justify-center text-slate-500">
-                📊 Top medicines chart will be rendered here
+                <p className="text-sm text-slate-600">
+                  Leverage machine learning for:
+                </p>
+                <ul className="space-y-2">
+                  <li className="flex items-center gap-2 text-sm text-slate-700">
+                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500"></div>
+                    30-Day Demand Forecasting
+                  </li>
+                  <li className="flex items-center gap-2 text-sm text-slate-700">
+                    <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
+                    Seasonal Trend Analysis
+                  </li>
+                  <li className="flex items-center gap-2 text-sm text-slate-700">
+                    <div className="h-1.5 w-1.5 rounded-full bg-purple-500"></div>
+                    Smart Reorder Recommendations
+                  </li>
+                </ul>
+                <Link to="/dashboard/predictions">
+                  <Button className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white mt-2">
+                    View AI Insights
+                  </Button>
+                </Link>
               </div>
             </div>
           </div>

@@ -98,11 +98,25 @@ export const api = {
 
     sales: {
         getAll: (params?: any) => apiClient.get('/sales', { params }),
+        getStatsSummary: (params?: any) => apiClient.get('/sales/stats/summary', { params }),
         create: (data: any) => apiClient.post('/sales', data),
     },
 
     dashboard: {
         getStats: () => apiClient.get('/dashboard/stats'),
         getAlerts: () => apiClient.get('/dashboard/alerts'),
+    },
+
+    billing: {
+        generateInvoice: (data: any) => apiClient.post('/billing/invoice', data),
+        getInvoices: (params: any) => apiClient.get('/billing/invoices', { params }),
+    },
+
+    predictions: {
+        getForecast: (id: number, days = 30) => apiClient.get(`/predictions/medicine/${id}/forecast`, { params: { days } }),
+        getSeasonalDemand: (season: string, limit = 10) => apiClient.get('/predictions/seasonal-demand', { params: { season, limit } }),
+        getReorderRecommendations: () => apiClient.get('/predictions/reorder-recommendations'),
+        getExpiryAlerts: (days = 90) => apiClient.get('/predictions/expiry-alerts', { params: { days } }),
+        getSalesAnalytics: (period = 30) => apiClient.get('/predictions/sales-analytics', { params: { period } }),
     },
 };
