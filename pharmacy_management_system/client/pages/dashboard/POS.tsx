@@ -1,7 +1,8 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Search, Plus, Trash2, Pill, User, CreditCard, Receipt, Download, Printer } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -41,7 +42,16 @@ interface CartItem {
 }
 
 export default function POS() {
+  const location = useLocation();
   const [cart, setCart] = useState<CartItem[]>([]);
+
+  useEffect(() => {
+    if (location.state?.cart) {
+      setCart(location.state.cart);
+      // Optional: Clean up state so refresh doesn't re-add
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
   const [searchTerm, setSearchTerm] = useState("");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [customerId, setCustomerId] = useState<string>("");
@@ -61,7 +71,7 @@ export default function POS() {
     queryKey: ["medicines", searchTerm],
     queryFn: async () => {
       const url = searchTerm
-        ? `/api/medicines?search=${encodeURIComponent(searchTerm)}&limit=100`
+        ? `/api/medicines?search=${encodeURIComponent(searchTerm)}&limit=1000`
         : "/api/medicines?limit=100";
       const response = await fetch(url);
       if (!response.ok) throw new Error("Failed to fetch medicines");

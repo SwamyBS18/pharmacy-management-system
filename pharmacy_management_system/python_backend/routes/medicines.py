@@ -114,6 +114,23 @@ def get_manufacturers():
         logger.error(f"Error fetching manufacturers: {e}")
         return jsonify({'error': 'Failed to fetch manufacturers'}), 500
 
+@medicines_bp.route('/categories/list', methods=['GET'])
+def get_categories():
+    """Get unique categories list"""
+    try:
+        query = """
+            SELECT DISTINCT category 
+            FROM medicines 
+            WHERE category IS NOT NULL AND category != '' 
+            ORDER BY category
+        """
+        results = execute_query(query)
+        categories = [row['category'] for row in results]
+        return jsonify(categories), 200
+    except Exception as e:
+        logger.error(f"Error fetching categories: {e}")
+        return jsonify({'error': 'Failed to fetch categories'}), 500
+
 @medicines_bp.route('/', methods=['POST'])
 def create_medicine():
     """Create new medicine"""
@@ -223,3 +240,114 @@ def delete_medicine(medicine_id):
     except Exception as e:
         logger.error(f"Error deleting medicine: {e}")
         return jsonify({'error': 'Failed to delete medicine'}), 500
+
+@medicines_bp.route('/generate-barcodes', methods=['POST'])
+def generate_missing_barcodes():
+    """Generate barcodes for all medicines that don't have one"""
+    try:
+        # Find all medicines without barcodes
+        query = """
+            SELECT id, medicine_name 
+            FROM medicines 
+            WHERE barcode IS NULL OR barcode = ''
+        """
+        medicines_without_barcodes = execute_query(query)
+        
+        if not medicines_without_barcodes:
+            return jsonify({
+                'message': 'All medicines already have barcodes',
+                'updated': 0
+            }), 200
+        
+        # Update each medicine with a barcode
+        updated_count = 0
+        updated_medicines = []
+        
+        for medicine in medicines_without_barcodes:
+            medicine_id = medicine['id']
+            medicine_name = medicine['medicine_name']
+            
+            # Generate barcode: '200' + zero-padded ID (10 digits total after '200')
+            barcode = '200' + str(medicine_id).zfill(10)
+            
+            # Update the medicine
+            update_query = """
+                UPDATE medicines 
+                SET barcode = %s 
+                WHERE id = %s
+                RETURNING id, medicine_name, barcode
+            """
+            result = execute_query(update_query, (barcode, medicine_id), fetch_one=True)
+            
+            if result:
+                updated_count += 1
+                updated_medicines.append({
+                    'id': result['id'],
+                    'name': result['medicine_name'],
+                    'barcode': result['barcode']
+                })
+        
+        return jsonify({
+            'message': f'Successfully generated {updated_count} barcodes',
+            'updated': updated_count,
+            'medicines': updated_medicines
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error generating barcodes: {e}")
+        return jsonify({'error': 'Failed to generate barcodes', 'details': str(e)}), 500
+
+@medicines_bp.route('/simplify-categories', methods=['POST'])
+def simplify_categories():
+    """Update medicine categories from technical to simple names"""
+    try:
+        # Mapping from technical to simple names
+        category_mapping = {
+            'Analgesic': 'Pain Relief',
+            'Anti-inflammatory': 'Inflammation',
+            'Antibiotic': 'Infection',
+            'Antidiabetic': 'Diabetes',
+            'Antihistamine': 'Allergy',
+            'Antipyretic': 'Fever',
+            'Antiviral': 'Viral Infection',
+            'Cardiovascular': 'Heart',
+            'Dermatological': 'Skin',
+            'Gastrointestinal': 'Digestive',
+            'Ophthalmic': 'Eye',
+            'Other': 'General',
+            'Respiratory': 'Breathing',
+            'Supplement': 'Vitamins'
+        }
+        
+        updated_count = 0
+        updates = []
+        
+        for old_name, new_name in category_mapping.items():
+            # Update all medicines with this category
+            update_query = """
+                UPDATE medicines 
+                SET category = %s 
+                WHERE category = %s
+                RETURNING id
+            """
+            results = execute_query(update_query, (new_name, old_name))
+            
+            if results:
+                count = len(results)
+                updated_count += count
+                updates.append({
+                    'old_name': old_name,
+                    'new_name': new_name,
+                    'count': count
+                })
+        
+        return jsonify({
+            'message': f'Successfully updated {updated_count} medicine categories',
+            'updated': updated_count,
+            'changes': updates
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error simplifying categories: {e}")
+        return jsonify({'error': 'Failed to simplify categories', 'details': str(e)}), 500
+

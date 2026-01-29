@@ -31,12 +31,13 @@ INVOICES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'invoice
 os.makedirs(INVOICES_DIR, exist_ok=True)
 
 
-def generate_invoice_pdf(sale_data):
+def generate_invoice_pdf(sale_data, pharmacy_data=None):
     """
     Generate a professional PDF invoice for a sale
     
     Args:
         sale_data: Dictionary containing sale information and items
+        pharmacy_data: Dictionary containing pharmacy profile information
         
     Returns:
         BytesIO object containing the PDF data
@@ -79,12 +80,19 @@ def generate_invoice_pdf(sale_data):
     elements.append(Paragraph("PHARMACY INVOICE", title_style))
     elements.append(Spacer(1, 0.2*inch))
     
-    # Company Information
+    # Company Information - Use pharmacy data from database
+    pharmacy_name = pharmacy_data.get('pharmacy_name', 'Pharmacy') if pharmacy_data else 'Pharmacy'
+    pharmacy_address = pharmacy_data.get('address', 'N/A') if pharmacy_data else 'N/A'
+    pharmacy_phone = pharmacy_data.get('phone', 'N/A') if pharmacy_data else 'N/A'
+    pharmacy_email = pharmacy_data.get('email', 'N/A') if pharmacy_data else 'N/A'
+    pharmacy_gst = pharmacy_data.get('gst_number', 'N/A') if pharmacy_data else 'N/A'
+    pharmacy_license = pharmacy_data.get('license_number', 'N/A') if pharmacy_data else 'N/A'
+    
     company_info = f"""
-    <b>PharmaAI Management System</b><br/>
-    123 Medical Street, Healthcare District<br/>
-    Phone: +91 1234567890 | Email: info@pharmaai.com<br/>
-    GSTIN: 29ABCDE1234F1Z5
+    <b>{pharmacy_name}</b><br/>
+    {pharmacy_address}<br/>
+    Phone: {pharmacy_phone} | Email: {pharmacy_email}<br/>
+    GSTIN: {pharmacy_gst} | License: {pharmacy_license}
     """
     elements.append(Paragraph(company_info, normal_style))
     elements.append(Spacer(1, 0.3*inch))
@@ -229,6 +237,14 @@ def generate_invoice_pdf(sale_data):
 def generate_invoice(sale_id):
     """Generate PDF invoice for a sale"""
     try:
+        # Fetch pharmacy data
+        pharmacy_query = """
+            SELECT pharmacy_name, address, phone, email, gst_number, license_number
+            FROM pharmacy
+            LIMIT 1
+        """
+        pharmacy_data = execute_query(pharmacy_query, fetch_one=True)
+        
         # Fetch sale data with items
         sale_query = """
             SELECT s.*, c.name as customer_name, c.phone as customer_phone,
@@ -250,8 +266,8 @@ def generate_invoice(sale_id):
         sale_data = dict(sale)
         sale_data['items'] = items
         
-        # Generate PDF
-        pdf_buffer = generate_invoice_pdf(sale_data)
+        # Generate PDF with pharmacy data
+        pdf_buffer = generate_invoice_pdf(sale_data, pharmacy_data)
         
         # Save PDF to file
         invoice_filename = f"invoice_{sale_data['invoice_number']}.pdf"
@@ -291,6 +307,14 @@ def get_invoice(sale_id):
         
         # If invoice doesn't exist, generate it
         if not os.path.exists(invoice_path):
+            # Fetch pharmacy data
+            pharmacy_query = """
+                SELECT pharmacy_name, address, phone, email, gst_number, license_number
+                FROM pharmacy
+                LIMIT 1
+            """
+            pharmacy_data = execute_query(pharmacy_query, fetch_one=True)
+            
             # Fetch complete sale data
             sale_query = """
                 SELECT s.*, c.name as customer_name, c.phone as customer_phone,
@@ -306,7 +330,7 @@ def get_invoice(sale_id):
             sale_dict = dict(sale_data)
             sale_dict['items'] = items
             
-            pdf_buffer = generate_invoice_pdf(sale_dict)
+            pdf_buffer = generate_invoice_pdf(sale_dict, pharmacy_data)
             
             with open(invoice_path, 'wb') as f:
                 f.write(pdf_buffer.getvalue())

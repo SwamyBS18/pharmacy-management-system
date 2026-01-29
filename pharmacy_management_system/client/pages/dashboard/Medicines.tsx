@@ -87,8 +87,18 @@ function BarcodeImage({ barcode }: { barcode: string }) {
 
 export default function Medicines() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedManufacturer, setSelectedManufacturer] = useState<string>("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
   const [itemsPerPage, setItemsPerPage] = useState(100);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
@@ -106,20 +116,20 @@ export default function Medicines() {
 
   const queryClient = useQueryClient();
 
-  // Fetch manufacturers list
-  const { data: manufacturersData } = useQuery<string[]>({
-    queryKey: ["manufacturers"],
+  // Fetch categories list
+  const { data: categoriesData } = useQuery<string[]>({
+    queryKey: ["categories"],
     queryFn: async () => {
-      const response = await fetch("/api/medicines/manufacturers/list");
-      if (!response.ok) throw new Error("Failed to fetch manufacturers");
+      const response = await fetch("/api/medicines/categories/list");
+      if (!response.ok) throw new Error("Failed to fetch categories");
       return response.json();
     },
   });
 
   // Build query parameters
   const queryParams = new URLSearchParams();
-  if (searchTerm) queryParams.append("search", searchTerm);
-  if (selectedManufacturer) queryParams.append("manufacturer", selectedManufacturer);
+  if (debouncedSearchTerm) queryParams.append("search", debouncedSearchTerm);
+  if (selectedCategory) queryParams.append("category", selectedCategory);
   queryParams.append("page", currentPage.toString());
   queryParams.append("limit", itemsPerPage.toString());
 
@@ -132,7 +142,7 @@ export default function Medicines() {
       totalPages: number;
     };
   }>({
-    queryKey: ["medicines", searchTerm, selectedManufacturer, currentPage, itemsPerPage],
+    queryKey: ["medicines", debouncedSearchTerm, selectedCategory, currentPage, itemsPerPage],
     queryFn: async () => {
       const url = `/api/medicines?${queryParams.toString()}`;
       const response = await fetch(url);
@@ -205,8 +215,8 @@ export default function Medicines() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleFilterChange = (manufacturer: string) => {
-    setSelectedManufacturer(manufacturer);
+  const handleFilterChange = (category: string) => {
+    setSelectedCategory(category);
     setCurrentPage(1);
   };
 
@@ -299,7 +309,7 @@ export default function Medicines() {
               </h2>
               <p className="text-sm text-slate-500 mt-1">
                 Showing {medicines.length} of {pagination.total.toLocaleString()} medicines
-                {selectedManufacturer && ` from ${selectedManufacturer}`}
+                {selectedCategory && ` in ${selectedCategory} category`}
               </p>
             </div>
             <Button
@@ -319,19 +329,18 @@ export default function Medicines() {
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
-                setCurrentPage(1);
               }}
               className="px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 flex-1 min-w-[200px]"
             />
             <select
-              value={selectedManufacturer}
+              value={selectedCategory}
               onChange={(e) => handleFilterChange(e.target.value)}
               className="px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white min-w-[250px]"
             >
-              <option value="">All Manufacturers</option>
-              {manufacturersData?.map((manufacturer) => (
-                <option key={manufacturer} value={manufacturer}>
-                  {manufacturer}
+              <option value="">All Categories</option>
+              {categoriesData?.map((category) => (
+                <option key={category} value={category}>
+                  {category}
                 </option>
               ))}
             </select>
@@ -387,8 +396,8 @@ export default function Medicines() {
                 {medicines.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-6 py-8 text-center text-slate-500">
-                      No medicines found. {searchTerm && "Try a different search term."}
-                      {selectedManufacturer && !searchTerm && "Try selecting a different manufacturer."}
+                      No medicines found. {debouncedSearchTerm && "Try a different search term."}
+                      {selectedCategory && !debouncedSearchTerm && "Try selecting a different category."}
                     </td>
                   </tr>
                 ) : (
@@ -435,10 +444,10 @@ export default function Medicines() {
                       <td className="px-6 py-4 text-sm">
                         <span
                           className={`px-5 py-1 rounded-full text-xs font-semibold ${medicine.stock > 100
-                              ? "bg-emerald-100 text-emerald-700"
-                              : medicine.stock > 50
-                                ? "bg-yellow-100 text-yellow-700"
-                                : "bg-red-100 text-red-700"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : medicine.stock > 50
+                              ? "bg-yellow-100 text-yellow-700"
+                              : "bg-red-100 text-red-700"
                             }`}
                         >
                           {medicine.stock || 0} units

@@ -30,7 +30,10 @@ import {
   Package,
   ScanLine,
   Brain,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
+import { useAlertSound } from "@/hooks/useAlertSound";
 
 interface DashboardLayoutProps {
   title: string;
@@ -67,6 +70,29 @@ export default function DashboardLayout({
 
   const totalExpired = expiredDrugs?.length || 0;
   const totalOutOfStock = outOfStock?.length || 0;
+
+  // Sound Alert Logic
+  const { play, stop } = useAlertSound();
+  const [isMuted, setIsMuted] = useState(false);
+  const [hasPlayedInitialAlert, setHasPlayedInitialAlert] = useState(false);
+
+  useEffect(() => {
+    const hasAlerts = totalExpired > 0 || totalOutOfStock > 0;
+
+    if (hasAlerts && !isMuted) {
+      play();
+      // If this is a new alert onset, ensure sidebar/header shows it clearly
+      if (!hasPlayedInitialAlert) {
+        setHasPlayedInitialAlert(true);
+        // Optional: auto-open dialog? Maybe too intrusive, let's just Stick to sound + red dot
+      }
+    } else {
+      stop();
+    }
+
+    // Cleanup on unmount
+    return () => stop();
+  }, [totalExpired, totalOutOfStock, isMuted, play, stop, hasPlayedInitialAlert]);
 
   // Get user role from localStorage
   const getUserRole = () => {
@@ -177,9 +203,32 @@ export default function DashboardLayout({
               >
                 <Bell className="h-6 w-6 text-slate-600" />
                 {(totalExpired > 0 || totalOutOfStock > 0) && (
+                  <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full animate-ping"></span>
+                )}
+                {(totalExpired > 0 || totalOutOfStock > 0) && (
                   <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
                 )}
               </button>
+
+              {/* Quick Mute Button in Header (Visible if alerting) */}
+              {((totalExpired > 0 || totalOutOfStock > 0) && !isMuted) && (
+                <button
+                  onClick={() => setIsMuted(true)}
+                  className="flex items-center gap-2 px-3 py-1 bg-red-100 text-red-600 rounded-full text-sm font-medium animate-pulse hover:bg-red-200"
+                >
+                  <Volume2 className="h-4 w-4" /> Stop Alarm
+                </button>
+              )}
+
+              {((totalExpired > 0 || totalOutOfStock > 0) && isMuted) && (
+                <button
+                  onClick={() => setIsMuted(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600"
+                  title="Unmute Alerts"
+                >
+                  <VolumeX className="h-5 w-5" />
+                </button>
+              )}
 
               <ProfileDropdown />
             </div>
@@ -211,6 +260,21 @@ export default function DashboardLayout({
               }
             </DialogDescription>
           </DialogHeader>
+
+          {/* Sound Control */}
+          {(totalExpired > 0 || totalOutOfStock > 0) && (
+            <div className="flex justify-end pr-2">
+              {isMuted ? (
+                <Button variant="outline" size="sm" onClick={() => setIsMuted(false)} className="gap-2 text-slate-500">
+                  <VolumeX className="h-4 w-4" /> Unmute Alarm
+                </Button>
+              ) : (
+                <Button variant="destructive" size="sm" onClick={() => setIsMuted(true)} className="gap-2 animate-pulse">
+                  <Volume2 className="h-4 w-4" /> Silence Alarm
+                </Button>
+              )}
+            </div>
+          )}
 
           <div className="space-y-6 mt-4">
             {/* Expired Drugs Section */}

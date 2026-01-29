@@ -1,0 +1,10 @@
+--- Fetching all medicines (limit 100) ---
+Found 100 medicines.
+First medicine: A-CN Gel
+
+--- Searching for substring '-C' (from 'A-CN Gel') ---
+Found 100 matches.
+SUCCESS: Found 'A-CN Gel' when searching for '-C'.
+
+--- Searching for start char 'A' ---
+Found 100 matches for start char 'A'.

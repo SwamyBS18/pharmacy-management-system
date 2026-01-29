@@ -76,14 +76,24 @@ def get_forecast(medicine_id):
         
         med_info = medicine_df[medicine_df['Medicine_ID'] == medicine_id]
         if med_info.empty:
-            return jsonify({'error': 'Medicine not found in ML database'}), 404
+            # Get available medicine IDs for helpful error message
+            available_ids = medicine_df['Medicine_ID'].unique().tolist()[:10]
+            return jsonify({
+                'error': 'Medicine not found in ML training database',
+                'message': f'Medicine ID {medicine_id} does not have ML training data. This is expected for newly added medicines.',
+                'available_sample_ids': available_ids,
+                'note': 'Only medicines with historical sales data can generate forecasts.'
+            }), 404
 
         med_info = med_info.iloc[0]
         category = med_info['Category']
         
         history = training_data[training_data['Medicine_ID'] == medicine_id]
         if history.empty:
-            return jsonify({'error': 'No training history for this medicine'}), 404
+            return jsonify({
+                'error': 'No training history for this medicine',
+                'message': f'Medicine ID {medicine_id} exists but has no historical sales data for predictions.'
+            }), 404
 
         recent = history.tail(30)
         predictions = []
@@ -187,12 +197,12 @@ def get_reorder_recommendations():
         # Get real current stock from DB if possible, otherwise simulate
         stock_map = {}
         try:
-            stock_query = "SELECT id, name, quantity FROM medicines"
+            stock_query = "SELECT id, medicine_name, stock FROM medicines"
             stock_results = execute_query(stock_query)
             # Map by similar name or ID if possible. 
             # Since ML IDs might not match DB IDs exactly, we'll try to match by name
             for row in stock_results:
-                stock_map[row['name'].lower()] = row['quantity']
+                stock_map[row['medicine_name'].lower()] = row['stock']
         except:
             logger.warning("Could not fetch real stock levels")
 
@@ -243,10 +253,10 @@ def get_expiry_alerts():
         
         query = """
             SELECT m.id, m.medicine_name, i.batch_id, i.quantity, i.expiry_date,
-                   DATE_PART('day', i.expiry_date - CURRENT_DATE) as days_until_expiry
+                   (i.expiry_date - CURRENT_DATE) as days_until_expiry
             FROM inventory i
             JOIN medicines m ON i.medicine_id = m.id
-            WHERE i.expiry_date <= CURRENT_DATE + interval '%s days'
+            WHERE i.expiry_date <= CURRENT_DATE + %s
             AND i.quantity > 0
             ORDER BY i.expiry_date ASC
         """
